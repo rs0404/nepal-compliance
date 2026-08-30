@@ -12,3 +12,4 @@ nepal_compliance.patches.property_setters
 nepal_compliance.patches.sync_custom_fields
 nepal_compliance.patches.backfill_taxable_summary
 nepal_compliance.patches.sync_ird_party_country_fields
+nepal_compliance.patches.split_vat_exempt_templates

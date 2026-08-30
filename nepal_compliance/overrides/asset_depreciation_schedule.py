@@ -1,13 +1,13 @@
-from frappe.utils import add_days, cint, flt, getdate
-
 from erpnext.assets.doctype.asset_depreciation_schedule.asset_depreciation_schedule import (
     AssetDepreciationSchedule,
     _get_pro_rata_amt,
 )
+from frappe.utils import add_days, cint, flt, getdate
 
 from nepal_compliance.nepali_date_utils.bs_periods import (
     advance,
     end_of,
+    is_fiscal_period_month,
     next_fiscal_period_end,
 )
 from nepal_compliance.nepali_date_utils.nepali_date import ad_to_bs
@@ -32,7 +32,7 @@ def is_bs_fiscal_period_end(ad_date, frequency):
     d = getdate(ad_date)
     bs = ad_to_bs(d)
     y, m = bs["year"], bs["month"]
-    if (m - 3) % freq != 0:
+    if not is_fiscal_period_month(y, m, freq):
         return False
     return d == end_of(y, m)
 

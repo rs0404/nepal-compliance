@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 from nepal_compliance.nepali_date_utils.utils import bs_date
 
 def convert_to_nepali_fy_format(year_start_date, year_end_date):
+    """Format an AD fiscal-year range using its approximate BS year labels."""
     try:
         start_year = year_start_date.year
         end_year = year_end_date.year
@@ -23,6 +24,7 @@ def convert_to_nepali_fy_format(year_start_date, year_end_date):
 
 @frappe.whitelist()
 def generate_ird_sales_register_excel():
+    """Generate the filtered IRD Sales Register as an XLSX download."""
     from nepal_compliance.nepal_compliance.report.sales_register_ird.sales_register_ird import get_data
 
     filters = frappe._dict(json.loads(frappe.form_dict.get("filters") or "{}"))
@@ -73,6 +75,7 @@ def generate_ird_sales_register_excel():
     )
 
     def format_cell(cell):
+        """Apply the shared heading style to one worksheet cell."""
         cell.alignment = center
         cell.font = bold_center
         cell.border = border

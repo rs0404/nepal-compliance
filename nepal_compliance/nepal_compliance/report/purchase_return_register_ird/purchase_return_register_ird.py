@@ -18,6 +18,8 @@ from nepal_compliance.utils import (
     resolve_report_vat_source,
 )
 
+ITEM_QUERY_BATCH_SIZE = 500
+
 
 def execute(filters=None):
     """Run the IRD Purchase Return Register and return columns plus rows."""
@@ -88,6 +90,29 @@ def get_data(filters):
 
     vat_breakup = get_vat_breakup("Purchase Invoice", {inv.invoice: inv.company for inv in invoices})
 
+    invoice_names = [inv.invoice for inv in invoices]
+    items_by_invoice = {}
+    for start in range(0, len(invoice_names), ITEM_QUERY_BATCH_SIZE):
+        batch_names = invoice_names[start:start + ITEM_QUERY_BATCH_SIZE]
+        batch_items = frappe.get_all(
+            "Purchase Invoice Item",
+            filters={"parent": ["in", batch_names]},
+            fields=[
+                "parent",
+                "is_nontaxable_item",
+                "net_amount",
+                "amount",
+                "asset_category",
+                "qty",
+                "uom",
+                "item_code",
+                "item_name",
+            ],
+            limit_page_length=0,
+        )
+        for item in batch_items:
+            items_by_invoice.setdefault(item.parent, []).append(item)
+
     for inv in invoices:
         supplier_country = resolve_ird_country(inv.stored_party_country, inv.address_country)
         is_import = is_foreign_country(supplier_country)
@@ -97,10 +122,7 @@ def get_data(filters):
         tax_exempt = taxable_domestic_nc = taxable_import_nc = capital_taxable_amount = 0.0
         tax_domestic_nc = tax_import_nc = tax_capital = 0.0
 
-        item_filters = {"parent": inv.invoice}
-
-        items = frappe.get_all("Purchase Invoice Item", filters=item_filters,
-            fields=["is_nontaxable_item", "net_amount", "amount", "asset_category", "qty", "uom", "item_code", "item_name"])
+        items = items_by_invoice.get(inv.invoice, [])
 
         item_vat_map, stored, breakup = resolve_report_vat_source(inv, vat_breakup)
         row_vat = distribute_item_vat(items, item_vat_map)

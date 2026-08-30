@@ -87,11 +87,41 @@ nepal_compliance.get_current_bs_year_month = function () {
 	} catch (error) {
 		console.error("Unable to determine the current BS month", error);
 	}
-	throw new Error("Nepali date conversion is unavailable.");
+	return null;
+};
+
+nepal_compliance._warn_ird_date_unavailable = function () {
+	if (nepal_compliance._ird_date_warning_shown) {
+		return;
+	}
+	nepal_compliance._ird_date_warning_shown = true;
+	frappe.msgprint({
+		title: __("Nepali Date Unavailable"),
+		indicator: "orange",
+		message: __("The report is available, but Nepali date defaults could not be loaded. Select a fiscal year or reload after the date assets are available."),
+	});
+};
+
+nepal_compliance._ird_bs_to_ad = function (year, month, day) {
+	try {
+		if (typeof NepaliDateLib !== "undefined" && NepaliDateLib.bsToAd) {
+			return nepal_compliance._ad_iso(NepaliDateLib.bsToAd(year, month - 1, day));
+		}
+		if (typeof NepaliFunctions !== "undefined" && NepaliFunctions.BS2AD) {
+			const value =
+				typeof formatDate === "function" && typeof getUserDateFormat === "function"
+					? formatDate(year, month, day, getUserDateFormat())
+					: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+			return NepaliFunctions.BS2AD(value);
+		}
+	} catch (error) {
+		console.error("Unable to convert the BS date", error);
+	}
+	return null;
 };
 
 nepal_compliance.ird_bs_month_ad_range = function (value) {
-	if (!value || typeof NepaliDateLib === "undefined" || !NepaliDateLib.bsToAd) {
+	if (!value) {
 		return null;
 	}
 	const parts = String(value).split("-").map(Number);
@@ -99,17 +129,19 @@ nepal_compliance.ird_bs_month_ad_range = function (value) {
 		return null;
 	}
 	const year = parts[0];
-	const monthIndex = parts[1] - 1;
-	const start = NepaliDateLib.bsToAd(year, monthIndex, 1);
-	const days =
-		(typeof NepaliDateLib.getDaysInMonth === "function" && NepaliDateLib.getDaysInMonth(year, monthIndex)) ||
-		(typeof NepaliDateLib.getMonthLength === "function" && NepaliDateLib.getMonthLength(year, monthIndex));
-	if (!days) {
-		return null;
+	const month = parts[1];
+	const monthIndex = month - 1;
+	let days = null;
+	if (typeof NepaliDateLib !== "undefined") {
+		days =
+			(typeof NepaliDateLib.getDaysInMonth === "function" && NepaliDateLib.getDaysInMonth(year, monthIndex)) ||
+			(typeof NepaliDateLib.getMonthLength === "function" && NepaliDateLib.getMonthLength(year, monthIndex));
 	}
-	const end = NepaliDateLib.bsToAd(year, monthIndex, days);
-	const from = nepal_compliance._ad_iso(start);
-	const to = nepal_compliance._ad_iso(end);
+	const from = nepal_compliance._ird_bs_to_ad(year, month, 1);
+	let to = days ? nepal_compliance._ird_bs_to_ad(year, month, days) : null;
+	for (let day = 32; !to && day >= 28; day--) {
+		to = nepal_compliance._ird_bs_to_ad(year, month, day);
+	}
 	if (!from || !to) {
 		return null;
 	}
@@ -221,6 +253,9 @@ nepal_compliance.sync_ird_dates_from_month = function (report, month) {
 
 nepal_compliance.ird_month_bounds = function () {
 	const current = nepal_compliance.get_current_bs_year_month();
+	if (!current) {
+		return null;
+	}
 	const default_value = nepal_compliance._bs_month_key(current.year, current.month);
 	const fy_start = nepal_compliance._nepali_fy_start(current.year, current.month);
 	const last_fy_start = nepal_compliance._add_bs_month(fy_start.year, fy_start.month, -12);
@@ -289,6 +324,11 @@ nepal_compliance.close_ird_month_picker = function () {
 
 nepal_compliance.render_ird_month_picker = function (pop, report, view_year) {
 	const bounds = nepal_compliance.ird_month_bounds();
+	if (!bounds) {
+		nepal_compliance.close_ird_month_picker();
+		nepal_compliance._warn_ird_date_unavailable();
+		return;
+	}
 	const current = bounds.current;
 	const selected = report.get_filter_value("bs_month") || bounds.default_value;
 	const entries = nepal_compliance.ird_month_entries();
@@ -353,6 +393,11 @@ nepal_compliance.render_ird_month_picker = function (pop, report, view_year) {
 
 nepal_compliance.render_ird_year_picker = function (pop, report, view_year) {
 	const bounds = nepal_compliance.ird_month_bounds();
+	if (!bounds) {
+		nepal_compliance.close_ird_month_picker();
+		nepal_compliance._warn_ird_date_unavailable();
+		return;
+	}
 	const selected = report.get_filter_value("bs_month") || bounds.default_value;
 	const years = [];
 	for (let y = bounds.min_year; y <= bounds.max_year; y++) {
@@ -409,9 +454,14 @@ nepal_compliance.open_ird_month_picker = function (report, $input) {
 		nepal_compliance.close_ird_month_picker();
 		return;
 	}
-	const selected = report.get_filter_value("bs_month") || nepal_compliance.ird_month_bounds().default_value;
+	const bounds = nepal_compliance.ird_month_bounds();
+	if (!bounds) {
+		nepal_compliance._warn_ird_date_unavailable();
+		return;
+	}
+	const selected = report.get_filter_value("bs_month") || bounds.default_value;
 	const parts = String(selected).split("-").map(Number);
-	const view_year = parts[0] || nepal_compliance.get_current_bs_year_month().year;
+	const view_year = parts[0] || bounds.current.year;
 	const rect = $input[0].getBoundingClientRect();
 	const pop = document.createElement("div");
 	pop.className = "nepali-calendar-popover ird-month-picker";
@@ -529,7 +579,7 @@ nepal_compliance.ird_bs_month_filter = function () {
 		fieldname: "bs_month",
 		label: __("महिना"),
 		fieldtype: "Data",
-		default: bounds.default_value,
+		default: bounds ? bounds.default_value : "",
 	};
 };
 
@@ -587,6 +637,10 @@ nepal_compliance.ird_register_filters = function (opts) {
 
 nepal_compliance.ensure_ird_current_month = function (report) {
 	const bounds = nepal_compliance.ird_month_bounds();
+	if (!bounds) {
+		nepal_compliance._warn_ird_date_unavailable();
+		return "";
+	}
 	const field = report.get_filter("bs_month");
 	if (!field) {
 		return bounds.default_value;

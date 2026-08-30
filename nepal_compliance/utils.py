@@ -1,11 +1,12 @@
 import json
+from typing import Union
 
 import frappe
 from frappe import _
-from frappe.utils import flt, get_link_to_form
-from frappe.utils.safe_exec import safe_eval
 from frappe.model.naming import make_autoname
-from typing import Union
+from frappe.utils import escape_html, flt, get_link_to_form
+from frappe.utils.safe_exec import safe_eval
+
 
 def prevent_invoice_deletion(doc, method):
     """Block deletion of submitted invoices for IRD compliance."""
@@ -102,7 +103,10 @@ def load_nepali_date(doc, method):
         doc.nepali_date = None
         return
 
-    from nepal_compliance.nepali_date_utils.utils import bs_date, nepal_compliance_enabled
+    from nepal_compliance.nepali_date_utils.utils import (
+        bs_date,
+        nepal_compliance_enabled,
+    )
 
     if not nepal_compliance_enabled():
         return
@@ -121,7 +125,8 @@ def bill_no_required(doc, method):
     if not doc.get("bill_no") or not str(doc.bill_no).strip():
         frappe.throw(_("<b>Supplier Invoice No</b> is mandatory before submitting a Purchase Invoice. This is required for auditing."))
 
-    if not doc.get("bill_date"):
+    settings = frappe.get_cached_doc("Nepal Compliance Settings")
+    if settings.get("require_supplier_bill_date") and not doc.get("bill_date"):
         frappe.throw(_("<b>Supplier Invoice Date</b> is mandatory before submitting a Purchase Invoice. This is required for auditing."))
 
 def check_app_permission():
@@ -148,11 +153,18 @@ def get_configured_vat_accounts():
 
 VAT_EXEMPT_TEMPLATE_TITLE = "VAT Exempt"
 
-def get_or_create_vat_exempt_template(company, vat_account):
-    """Return the 0% VAT Exempt item tax template for the company, creating it if needed."""
+
+def vat_exempt_template_title(side):
+    """Return the stable side-specific title for a VAT-exempt template."""
+    return f"{VAT_EXEMPT_TEMPLATE_TITLE} ({'Sales' if side == 'sales' else 'Purchase'})"
+
+
+def get_or_create_vat_exempt_template(company, vat_account, side):
+    """Return the side-specific 0% VAT-exempt template, creating it if needed."""
+    title = vat_exempt_template_title(side)
     existing = frappe.get_all(
         "Item Tax Template",
-        filters={"company": company, "title": VAT_EXEMPT_TEMPLATE_TITLE},
+        filters={"company": company, "title": title},
         pluck="name",
     )
     if existing:
@@ -168,7 +180,7 @@ def get_or_create_vat_exempt_template(company, vat_account):
 
     template = frappe.get_doc({
         "doctype": "Item Tax Template",
-        "title": VAT_EXEMPT_TEMPLATE_TITLE,
+        "title": title,
         "company": company,
         "taxes": [{"tax_type": vat_account, "tax_rate": 0}],
     }).insert(ignore_permissions=True)
@@ -197,7 +209,7 @@ def apply_vat_exemption_for_nontaxable_items(doc, method):
     if not any(tax.account_head == vat_account for tax in doc.get("taxes") or []):
         return
 
-    template_name = get_or_create_vat_exempt_template(doc.company, vat_account)
+    template_name = get_or_create_vat_exempt_template(doc.company, vat_account, side)
     for item in flagged:
         item.item_tax_template = template_name
         item.item_tax_rate = json.dumps({vat_account: 0})
@@ -207,6 +219,17 @@ def is_purchase_invoice_attachment_required():
     """True when Nepal Compliance Settings requires a purchase invoice attachment."""
     settings = frappe.get_cached_doc("Nepal Compliance Settings")
     return int(bool(settings.get("require_purchase_invoice_attachment")))
+
+
+@frappe.whitelist()
+def get_purchase_invoice_requirements():
+    """Return submit-time purchase requirements used by the form UI."""
+    settings = frappe.get_cached_doc("Nepal Compliance Settings")
+    return {
+        "bill_date": int(bool(settings.get("require_supplier_bill_date"))),
+        "attachment": int(bool(settings.get("require_purchase_invoice_attachment"))),
+    }
+
 
 def require_purchase_invoice_attachment(doc, method):
     """Block submit when a purchase invoice attachment is required and missing."""
@@ -264,11 +287,15 @@ def validate_duplicate_bill_no(doc, method):
         if existing_bill.lower() == normalized_bill_no.lower():
             supplier_name = frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier
             invoice_link = get_link_to_form("Purchase Invoice", inv.name)
+            safe_supplier = escape_html(f"{supplier_name} ({doc.supplier})")
+            safe_bill_no = escape_html(str(doc.bill_no))
+            safe_fiscal_year = escape_html(str(fiscal_year.name))
+            safe_invoice_name = escape_html(str(inv.name))
             frappe.msgprint(
                 _("<b>Duplicate Bill No Detected.</b><br><br>Supplier: {0}<br>Bill No: {1}<br>Fiscal Year: {2}<br><br>Existing Invoice: {3}<br><small>Click the invoice link above to view the existing record.</small>").format(
-                    f"{supplier_name} ({doc.supplier})",
-                    doc.bill_no,
-                    fiscal_year.name,
+                    safe_supplier,
+                    safe_bill_no,
+                    safe_fiscal_year,
                     invoice_link
                 ),
                 indicator="red",
@@ -277,7 +304,7 @@ def validate_duplicate_bill_no(doc, method):
             )
             frappe.throw(
                 _("Duplicate Bill Number '{0}' not allowed for supplier '{1}' in fiscal year '{2}'. Please check invoice {3}.").format(
-                    doc.bill_no, supplier_name, fiscal_year.name, inv.name
+                    safe_bill_no, escape_html(str(supplier_name)), safe_fiscal_year, safe_invoice_name
                 )
             )
 
@@ -348,7 +375,7 @@ def taxable_base_from_vat(vat_amount, rate, net_amount):
 def item_taxable_amount(item, row_vat, item_vat_map):
     """Taxable base for one item row: VAT ÷ rate, falling back to net amount."""
     key = item.get("item_code") or item.get("item_name")
-    rate, _ = parse_item_vat_entry(item_vat_map.get(key))
+    rate, _amount = parse_item_vat_entry(item_vat_map.get(key))
     return taxable_base_from_vat(row_vat, rate, item.get("net_amount"))
 
 
@@ -485,7 +512,7 @@ def resolve_report_vat_source(inv, vat_breakup):
 def parse_stored_item_vat_map(raw):
     """Return a dict VAT map, or None when stored detail is missing or the wrong shape."""
     if raw is None or raw == "":
-        return {}
+        return None
     parsed = raw
     if isinstance(raw, str):
         try:

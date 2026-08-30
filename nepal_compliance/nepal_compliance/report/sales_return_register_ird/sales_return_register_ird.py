@@ -2,10 +2,23 @@
 # For license information, please see LICENSE at the root of this repository
 
 import frappe
-from frappe.utils import flt
 from frappe import _
-from nepal_compliance.ird_filters import apply_ird_posting_date_filters, invoice_link_fields
-from nepal_compliance.utils import distribute_item_vat, get_vat_breakup, is_exempt_report_item, item_taxable_amount, resolve_report_vat_source
+from frappe.utils import flt
+
+from nepal_compliance.ird_filters import (
+    apply_ird_posting_date_filters,
+    invoice_link_fields,
+)
+from nepal_compliance.utils import (
+    distribute_item_vat,
+    get_vat_breakup,
+    is_exempt_report_item,
+    item_taxable_amount,
+    resolve_report_vat_source,
+)
+
+ITEM_QUERY_BATCH_SIZE = 500
+
 
 def execute(filters=None):
     """Run the IRD Sales Return Register and return columns plus rows."""
@@ -65,8 +78,9 @@ def get_data(filters):
             si.taxable_amount as stored_taxable_amount,
             si.vat_amount as stored_vat_amount,
             si.item_vat_detail as stored_item_vat_detail,
-            si.posting_date
+            c.tax_id as customer_tax_id
         FROM `tabSales Invoice` si
+        LEFT JOIN `tabCustomer` c ON si.customer = c.name
         WHERE {conditions}
         ORDER BY si.posting_date
     """
@@ -78,17 +92,27 @@ def get_data(filters):
 
     vat_breakup = get_vat_breakup("Sales Invoice", {inv.invoice: inv.company for inv in invoices})
 
+    invoice_names = [inv.invoice for inv in invoices]
+    items_by_invoice = {}
+    for start in range(0, len(invoice_names), ITEM_QUERY_BATCH_SIZE):
+        batch_names = invoice_names[start:start + ITEM_QUERY_BATCH_SIZE]
+        batch_items = frappe.get_all(
+            "Sales Invoice Item",
+            filters={"parent": ["in", batch_names]},
+            fields=["parent", "is_nontaxable_item", "net_amount", "amount", "item_code", "qty", "uom", "item_name"],
+            limit_page_length=0,
+        )
+        for item in batch_items:
+            items_by_invoice.setdefault(item.parent, []).append(item)
+
     grand_qty = grand_total = grand_tax_exempt = grand_taxable = grand_tax = 0.0
 
     for inv in invoices:
-        item_filters = {"parent": inv.invoice}
-        items = frappe.get_all("Sales Invoice Item", filters=item_filters,
-            fields=["is_nontaxable_item", "net_amount", "amount", "item_code", "qty", "uom", "item_name"])
+        items = items_by_invoice.get(inv.invoice, [])
 
         item_vat_map, stored, breakup = resolve_report_vat_source(inv, vat_breakup)
-        total_vat = flt(inv.get("stored_vat_amount")) if stored else flt(breakup.get("total_vat"))
 
-        tax_exempt_total = taxable_total = total_qty = 0.0
+        tax_exempt_total = taxable_total = total_qty = tax_total = 0.0
 
         row_vat = distribute_item_vat(items, item_vat_map)
 
@@ -107,13 +131,14 @@ def get_data(filters):
                 taxable_amount_item = item_taxable_amount(item, item_vat, item_vat_map)
                 tax_amount_item = item_vat
                 taxable_total += taxable_amount_item
+                tax_total += tax_amount_item
 
             data.append({
                 "posting_date": inv.posting_date or "",
                 "invoice": inv.invoice,
                 **invoice_link_fields("Sales Invoice", inv.invoice),
                 "customer_name": inv.customer_name,
-                "pan": inv.pan or frappe.db.get_value("Customer", inv.customer, "tax_id"),
+                "pan": inv.pan or inv.customer_tax_id,
                 "name": item.get("item_name") or item.get("item_code"),
                 "qty": abs(qty),
                 "uom": item.get("uom") or "",
@@ -135,14 +160,14 @@ def get_data(filters):
             "total": abs(flt(inv.rounded_total or inv.grand_total)),
             "tax_exempt": abs(flt(tax_exempt_total)),
             "taxable_amount": abs(flt(taxable_total)),
-            "tax_amount": abs(total_vat)
+            "tax_amount": abs(flt(tax_total)),
         })
 
         grand_qty += abs(total_qty)
         grand_total += abs(flt(inv.rounded_total or inv.grand_total))
         grand_tax_exempt += abs(flt(tax_exempt_total))
         grand_taxable += abs(flt(taxable_total))
-        grand_tax += abs(total_vat)
+        grand_tax += abs(flt(tax_total))
 
     data.append({
         "posting_date": "",
