@@ -2,10 +2,22 @@
 # For license information, please see LICENSE at the root of this repository
 
 import frappe
-from frappe.utils import flt
 from frappe import _
-from nepal_compliance.ird_filters import apply_ird_posting_date_filters, invoice_link_fields
-from nepal_compliance.utils import distribute_item_vat, get_vat_breakup, is_exempt_report_item, item_taxable_amount, resolve_report_vat_source
+from frappe.utils import flt
+
+from nepal_compliance.ird_country import is_foreign_country, resolve_ird_country
+from nepal_compliance.ird_filters import (
+    apply_ird_posting_date_filters,
+    invoice_link_fields,
+)
+from nepal_compliance.utils import (
+    distribute_item_vat,
+    get_vat_breakup,
+    is_exempt_report_item,
+    item_taxable_amount,
+    resolve_report_vat_source,
+)
+
 
 def execute(filters=None):
     """Run the IRD Purchase Register and return columns plus rows."""
@@ -59,9 +71,12 @@ def get_data(filters):
             pi.name as invoice, pi.bill_no, pi.bill_date, pi.customs_declaration_number, pi.rounded_total, pi.grand_total, pi.posting_date,
             pi.supplier_name, pi.tax_id as invoice_pan, pi.total, pi.supplier, pi.company,
             pi.taxable_amount as stored_taxable_amount, pi.item_vat_detail as stored_item_vat_detail,
-            s.country as supplier_country, s.tax_id as supplier_tax_id
+            pi.ird_party_country as stored_party_country,
+            supplier_address.country as address_country,
+            s.tax_id as supplier_tax_id
         FROM `tabPurchase Invoice` pi
         LEFT JOIN `tabSupplier` s ON pi.supplier = s.name
+        LEFT JOIN `tabAddress` supplier_address ON supplier_address.name = pi.supplier_address
         WHERE {conditions}
         ORDER BY pi.posting_date
     """
@@ -88,8 +103,8 @@ def get_data(filters):
         items_by_invoice = {}
 
     for inv in invoices:
-        supplier_country = (inv.supplier_country or "nepal").strip().lower()
-        is_import = supplier_country != "nepal"
+        supplier_country = resolve_ird_country(inv.stored_party_country, inv.address_country)
+        is_import = is_foreign_country(supplier_country)
 
         pan = inv.invoice_pan or inv.supplier_tax_id
 
