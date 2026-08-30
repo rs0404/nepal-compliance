@@ -92,6 +92,14 @@ function listen_for_preview_done() {
 		}
 		delete pending[data.request_id];
 		frappe.hide_progress();
+		if (data.error) {
+			frappe.msgprint({
+				title: __("Taxable Summary Preview Failed"),
+				indicator: "red",
+				message: frappe.utils.escape_html(data.error),
+			});
+			return;
+		}
 		show_preview_dialog(data, values);
 	});
 }
@@ -105,6 +113,9 @@ function new_preview_request_id() {
 
 function run_preview(values) {
 	const request_id = new_preview_request_id();
+	frappe._taxable_summary_preview_pending = frappe._taxable_summary_preview_pending || {};
+	frappe._taxable_summary_preview_pending[request_id] = values;
+	listen_for_preview_done();
 	frappe.call({
 		method: "nepal_compliance.taxable_summary.preview_taxable_summary_refresh",
 		args: {
@@ -116,13 +127,25 @@ function run_preview(values) {
 		freeze_message: __("Scanning invoices..."),
 		callback(r) {
 			if (!r.message) {
+				delete frappe._taxable_summary_preview_pending[request_id];
 				return;
 			}
 			if (r.message.queued) {
+				if (r.message.duplicate) {
+					delete frappe._taxable_summary_preview_pending[request_id];
+					frappe.msgprint(
+						__("A preview for this date range is already running.")
+					);
+					return;
+				}
 				const id = r.message.request_id || request_id;
-				frappe._taxable_summary_preview_pending = frappe._taxable_summary_preview_pending || {};
-				frappe._taxable_summary_preview_pending[id] = values;
-				listen_for_preview_done();
+				if (id !== request_id) {
+					frappe._taxable_summary_preview_pending[id] = values;
+					delete frappe._taxable_summary_preview_pending[request_id];
+				}
+				if (!frappe._taxable_summary_preview_pending[id]) {
+					return;
+				}
 				frappe.show_progress(
 					__("Scanning invoices..."),
 					1,
@@ -133,7 +156,12 @@ function run_preview(values) {
 				);
 				return;
 			}
+			delete frappe._taxable_summary_preview_pending[request_id];
 			show_preview_dialog(r.message, values);
+		},
+		error() {
+			delete frappe._taxable_summary_preview_pending[request_id];
+			frappe.hide_progress();
 		},
 	});
 }
@@ -208,6 +236,8 @@ function show_preview_dialog(preview, values) {
 			<li>${__("Would change")}: <b>${preview.changed}</b> (${__("Sales")}: ${preview.sales_changed}, ${__("Purchase")}: ${preview.purchase_changed})</li>
 			<li>${__("Unchanged")}: <b>${preview.unchanged}</b></li>
 			<li>${__("Skipped (no VAT account configured)")}: <b>${preview.skipped}</b></li>
+			<li>${__("Denied by permissions")}: <b>${preview.denied || 0}</b></li>
+			<li>${__("Failed")}: <b>${preview.failed || 0}</b></li>
 		</ul>
 		${batch_line}
 		${table}
@@ -239,37 +269,80 @@ function listen_for_refresh_done() {
 		return;
 	}
 	frappe._taxable_summary_refresh_listener = true;
+	frappe._taxable_summary_apply_pending = frappe._taxable_summary_apply_pending || {};
 	frappe.realtime.on("taxable_summary_refresh_done", (data) => {
-		if (!data) {
+		if (!data || !data.request_id) {
+			return;
+		}
+		const pending = frappe._taxable_summary_apply_pending || {};
+		if (!pending[data.request_id]) {
+			return;
+		}
+		delete pending[data.request_id];
+		if (data.error) {
+			frappe.msgprint({
+				title: __("Taxable Summary Refresh Failed"),
+				indicator: "red",
+				message: frappe.utils.escape_html(data.error),
+			});
 			return;
 		}
 		frappe.msgprint({
 			title: __("Taxable Summary Refresh"),
-			indicator: "green",
-			message: __("Updated {0} invoice(s) from {1} to {2}.", [
+			indicator: data.denied || data.failed ? "orange" : "green",
+			message: __(
+				"Updated {0} invoice(s) from {1} to {2}. Denied: {3}; skipped: {4}; failed: {5}.",
+				[
 				data.updated,
 				data.from_date,
 				data.to_date,
-			]),
+				data.denied || 0,
+				data.skipped || 0,
+				data.failed || 0,
+				]
+			),
 		});
 	});
 }
 
 function run_apply(values) {
+	frappe._taxable_summary_apply_pending = frappe._taxable_summary_apply_pending || {};
+	const already_running = Object.values(frappe._taxable_summary_apply_pending).some(
+		(pending) =>
+			pending.from_date === values.from_date && pending.to_date === values.to_date
+	);
+	if (already_running) {
+		frappe.msgprint(__("An update for this date range is already running."));
+		return;
+	}
+	const request_id = new_preview_request_id();
+	frappe._taxable_summary_apply_pending[request_id] = values;
+	listen_for_refresh_done();
 	frappe.call({
 		method: "nepal_compliance.taxable_summary.apply_taxable_summary_refresh",
 		args: {
 			from_date: values.from_date,
 			to_date: values.to_date,
+			request_id: request_id,
 		},
 		freeze: true,
 		freeze_message: __("Updating invoices..."),
 		callback(r) {
 			if (!r.message) {
+				delete frappe._taxable_summary_apply_pending[request_id];
 				return;
 			}
 			if (r.message.queued) {
-				listen_for_refresh_done();
+				if (r.message.duplicate) {
+					delete frappe._taxable_summary_apply_pending[request_id];
+					frappe.msgprint(
+						__("An update for this date range is already running.")
+					);
+					return;
+				}
+				if (!frappe._taxable_summary_apply_pending[request_id]) {
+					return;
+				}
 				frappe.msgprint(
 					__(
 						"More than 500 invoices are in this range. The update is running in the background in batches of 500. You will be notified when it finishes."
@@ -277,7 +350,19 @@ function run_apply(values) {
 				);
 				return;
 			}
-			frappe.msgprint(__("Updated {0} invoice(s).", [r.message.updated]));
+			delete frappe._taxable_summary_apply_pending[request_id];
+			frappe.msgprint(
+				__("Updated {0} invoice(s). Denied: {1}; skipped: {2}; failed: {3}.", [
+					r.message.updated,
+					r.message.denied || 0,
+					r.message.skipped || 0,
+					r.message.failed || 0,
+				])
+			);
+		},
+		error() {
+			delete frappe._taxable_summary_apply_pending[request_id];
+			frappe.hide_progress();
 		},
 	});
 }
