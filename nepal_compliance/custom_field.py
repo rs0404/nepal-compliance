@@ -1,5 +1,4 @@
 import frappe
-from dataclasses import fields
 from frappe import _
 
 
@@ -82,6 +81,7 @@ def create_custom_fields(quiet=False):
         ],  
         "Purchase Invoice":[
             {"fieldname": "nepali_date", "label": "Nepali Date", "fieldtype": "Data", "insert_after": "posting_date", "allow_on_submit": 1},
+            {"fieldname": "ird_party_country", "label": "IRD Party Country", "fieldtype": "Link", "options": "Country", "insert_after": "supplier_address", "hidden": 1, "read_only": 1},
             {"fieldname": "vat_number", "label": "Supplier VAT/PAN", "fieldtype": "Data", "insert_after": "supplier", "in_list_view": 1, "allow_on_submit": 1},
             {"fieldname": "customer_vat_number", "label": "Customer VAT/PAN", "fieldtype": "Data", "insert_after": "vat_number", "in_list_view": 1, "allow_on_submit": 1},
             {"fieldname": "qr_code", "label": "QR Code", "fieldtype": "Attach", "insert_after": "customer_vat_number", "hidden": 1, "allow_on_submit": 1},
@@ -101,6 +101,7 @@ def create_custom_fields(quiet=False):
         ],
         "Sales Invoice": [
             {"fieldname": "nepali_date", "label": "Nepali Date", "fieldtype": "Data", "insert_after": "posting_date", "allow_on_submit": 1},
+            {"fieldname": "ird_party_country", "label": "IRD Party Country", "fieldtype": "Link", "options": "Country", "insert_after": "customer_address", "hidden": 1, "read_only": 1},
             {"fieldname": "vat_number", "label": "Customer VAT/PAN", "fieldtype": "Data", "insert_after": "customer", "in_list_view": 1, "allow_on_submit": 1},
             {"fieldname": "supplier_vat_number", "label": "Supplier VAT/PAN", "fieldtype": "Data", "insert_after": "vat_number", "in_list_view": 1, "allow_on_submit": 1},
             {"fieldname": "qr_code", "label": "QR Code", "fieldtype": "Attach", "insert_after": "supplier_vat_number", "hidden": 1, "allow_on_submit": 1},
@@ -338,11 +339,17 @@ def create_custom_fields(quiet=False):
                 })
                 custom_field.save()
                 if not quiet:
-                    frappe.msgprint(_(f"Custom field '{field.get('label') or field['fieldname']}' added successfully to {doctype_name}!"))
+                    frappe.msgprint(
+                        _("Custom field '{0}' added successfully to {1}!").format(
+                            field.get("label") or field["fieldname"], doctype_name
+                        )
+                    )
                 created_fields.append({"dt": doctype_name, "fieldname": field["fieldname"]})
             elif not quiet:
-                frappe.msgprint(_(f"Field '{field.get('label') or field['fieldname']}' already exists in {doctype_name}."))
+                frappe.msgprint(
+                    _("Field '{0}' already exists in {1}.").format(
+                        field.get("label") or field["fieldname"], doctype_name
+                    )
+                )
 
-    return created_fields  
-
-create_custom_fields()
+    return created_fields

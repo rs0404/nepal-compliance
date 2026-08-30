@@ -11,3 +11,4 @@ nepal_compliance.patches.v15.hide_js_bs_fields
 nepal_compliance.patches.property_setters
 nepal_compliance.patches.sync_custom_fields
 nepal_compliance.patches.backfill_taxable_summary
+nepal_compliance.patches.sync_ird_party_country_fields
