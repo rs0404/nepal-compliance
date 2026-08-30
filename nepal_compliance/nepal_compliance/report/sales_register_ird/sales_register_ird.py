@@ -2,10 +2,22 @@
 # For license information, please see LICENSE at the root of this repository
 
 import frappe
-from frappe.utils import flt
 from frappe import _
-from nepal_compliance.ird_filters import apply_ird_posting_date_filters, invoice_link_fields
-from nepal_compliance.utils import distribute_item_vat, get_vat_breakup, is_exempt_report_item, item_taxable_amount, resolve_report_vat_source
+from frappe.utils import flt
+
+from nepal_compliance.ird_country import is_foreign_country, resolve_ird_country
+from nepal_compliance.ird_filters import (
+    apply_ird_posting_date_filters,
+    invoice_link_fields,
+)
+from nepal_compliance.utils import (
+    distribute_item_vat,
+    get_vat_breakup,
+    is_exempt_report_item,
+    item_taxable_amount,
+    resolve_report_vat_source,
+)
+
 
 def execute(filters=None):
     """Run the IRD Sales Register and return columns plus rows."""
@@ -57,9 +69,12 @@ def get_data(filters):
             si.name as invoice, si.rounded_total, si.posting_date, si.customer_name, si.tax_id as invoice_pan, si.customer, si.company,
             si.total, si.net_total, si.grand_total, si.customs_declaration_number, si.customs_declaration_date_bs,
             si.taxable_amount as stored_taxable_amount, si.item_vat_detail as stored_item_vat_detail,
-            c.territory as customer_country
+            si.ird_party_country as stored_party_country,
+            billing_address.country as address_country,
+            c.tax_id as customer_tax_id
         FROM `tabSales Invoice` si
         LEFT JOIN `tabCustomer` c ON si.customer = c.name
+        LEFT JOIN `tabAddress` billing_address ON billing_address.name = si.customer_address
         WHERE {conditions}
         ORDER BY si.posting_date
     """
@@ -72,10 +87,10 @@ def get_data(filters):
     vat_breakup = get_vat_breakup("Sales Invoice", {inv.invoice: inv.company for inv in invoices})
 
     for inv in invoices:
-        customer_country = (inv.customer_country or "").strip()
-        is_export = customer_country.lower() not in ("", "nepal")
+        customer_country = resolve_ird_country(inv.stored_party_country, inv.address_country)
+        is_export = is_foreign_country(customer_country)
 
-        pan = inv.invoice_pan or frappe.db.get_value("Customer", inv.customer, "tax_id")
+        pan = inv.invoice_pan or inv.customer_tax_id
         
         tax_exempt = taxable_domestic_nc = taxable_import_nc = capital_taxable_amount = 0.0
         tax_domestic_nc = 0.0
