@@ -3,7 +3,7 @@
 
 frappe.provide("nepal_compliance");
 
-nepal_compliance.IRD_MONTH_PICKER_VERSION = "grid-1";
+nepal_compliance.IRD_MONTH_PICKER_VERSION = "grid-6";
 
 nepal_compliance.IRD_REGISTER_REPORTS = [
 	"Sales Register IRD",
@@ -622,7 +622,6 @@ nepal_compliance.ird_register_filters = function (opts) {
 			options: opts.party.options,
 		});
 	}
-	filters.push({ fieldtype: "Break" });
 	if (opts.document) {
 		filters.push({
 			fieldname: opts.document.fieldname,
@@ -698,6 +697,9 @@ nepal_compliance.on_ird_fiscal_year_change = function (report) {
 };
 
 nepal_compliance.setup_ird_register = function (report, download_method) {
+	if (report && report.page && report.page.main) {
+		report.page.main.addClass("ird-register-page");
+	}
 	nepal_compliance.bind_ird_month_picker(report);
 	nepal_compliance.bind_ird_bs_date_filter(report, "from_nepali_date");
 	nepal_compliance.bind_ird_bs_date_filter(report, "to_nepali_date");
@@ -735,6 +737,13 @@ nepal_compliance.setup_ird_register = function (report, download_method) {
 
 nepal_compliance.ird_invoice_formatter = function (value, row, column, data, default_formatter) {
 	const fieldname = column.fieldname || column.id;
+	if (data && data.is_section) {
+		if (fieldname === "invoice") {
+			const label = frappe.utils.escape_html(value || "");
+			return `<span style="font-weight:600">${label}</span>`;
+		}
+		return "";
+	}
 	if (fieldname === "invoice" && data) {
 		const name = data.invoice_name;
 		const doctype = data.invoice_doctype;
@@ -744,7 +753,99 @@ nepal_compliance.ird_invoice_formatter = function (value, row, column, data, def
 			return `<a class="underline" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 		}
 	}
+	if (fieldname === "bill_date" && data && cint(data.bill_month_mismatch)) {
+		const formatted = default_formatter(value, row, column, data);
+		const days = data.bill_posting_day_diff;
+		const title =
+			days == null
+				? __("Bill date and posting date are in different BS months")
+				: __("{0} day(s) between bill date and posting date (different BS months)", [days]);
+		return `<span class="ird-bill-date-mismatch" title="${frappe.utils.escape_html(
+			title
+		)}">${formatted}</span>`;
+	}
 	return default_formatter(value, row, column, data);
+};
+
+nepal_compliance.destroy_prior_fy_purchase_table = function (report) {
+	if (report._prior_fy_datatable && report._prior_fy_datatable.destroy) {
+		report._prior_fy_datatable.destroy();
+	}
+	report._prior_fy_datatable = null;
+	if (report.$prior_fy_section) {
+		report.$prior_fy_section.remove();
+		report.$prior_fy_section = null;
+	}
+};
+
+nepal_compliance.patch_purchase_register_dual_tables = function (report) {
+	if (report._prior_fy_prepare_patched) {
+		return;
+	}
+	report._prior_fy_prepare_patched = true;
+	const original = report.prepare_report_data.bind(report);
+	report.prepare_report_data = function (data) {
+		original(data);
+		const rows = this.data || [];
+		this._prior_fy_purchases = rows.filter((r) => r && r.is_prior_fy);
+		this.data = rows.filter((r) => !(r && r.is_prior_fy));
+	};
+};
+
+nepal_compliance.render_prior_fy_purchase_table = function (report) {
+	nepal_compliance.destroy_prior_fy_purchase_table(report);
+
+	if (report.$purchase_register_heading) {
+		report.$purchase_register_heading.remove();
+		report.$purchase_register_heading = null;
+	}
+
+	const prior = report._prior_fy_purchases || [];
+	if (!report.$report || !report.$report.length) {
+		return;
+	}
+
+	if (prior.length) {
+		const $main_heading = $(`
+			<div class="ird-purchase-register-heading">
+				<strong>${__("Purchase Register")}</strong>
+				<span class="text-muted"> (${__("खरिद खाता")})</span>
+			</div>
+		`);
+		report.$report.before($main_heading);
+		report.$purchase_register_heading = $main_heading;
+	}
+
+	if (!prior.length) {
+		return;
+	}
+
+	const $section = $(`
+		<div class="ird-prior-fy-section">
+			<div class="ird-prior-fy-heading">
+				<strong>${__("Prior Fiscal Year Purchases")}</strong>
+				<span class="text-muted"> (${__("गत आर्थिक वर्षका खरिद")})</span>
+			</div>
+			<div class="ird-prior-fy-datatable"></div>
+		</div>
+	`);
+	report.$report.after($section);
+	report.$prior_fy_section = $section;
+
+	const columns = (report.columns || []).filter((col) => !col.hidden);
+	report._prior_fy_datatable = new DataTable($section.find(".ird-prior-fy-datatable")[0], {
+		columns: columns,
+		data: prior,
+		inlineFilters: true,
+		language: frappe.boot.lang,
+		translations: frappe.utils.datatable.get_translations(),
+		layout: "fixed",
+		cellHeight: 33,
+		direction: frappe.utils.is_rtl() ? "rtl" : "ltr",
+		hooks: {
+			columnTotal: frappe.utils.report_column_total,
+		},
+	});
 };
 
 if (typeof frappe !== "undefined" && frappe.query_reports) {
