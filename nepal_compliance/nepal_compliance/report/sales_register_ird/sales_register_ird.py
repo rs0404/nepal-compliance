@@ -19,11 +19,51 @@ from nepal_compliance.utils import (
 )
 
 
+def get_sales_register_summary(rows):
+    """Build colored summary cards for the Sales Register."""
+    rows = rows or []
+    total = len(rows)
+    tax_exempt = sum(1 for r in rows if flt(r.get("tax_exempt")) > 0)
+    taxable = sum(1 for r in rows if flt(r.get("taxable_amount")) > 0)
+    export = sum(
+        1 for r in rows if flt(r.get("Value of Exported Goods or Services")) > 0
+    )
+
+    return [
+        {
+            "value": total,
+            "label": _("Total Sales"),
+            "datatype": "Int",
+            "indicator": "Blue",
+        },
+        {
+            "value": tax_exempt,
+            "label": _("कर छुटको बिक्री"),
+            "datatype": "Int",
+            "indicator": "Grey",
+        },
+        {
+            "value": taxable,
+            "label": _("करयोग्य बिक्री"),
+            "datatype": "Int",
+            "indicator": "Blue",
+        },
+        {
+            "value": export,
+            "label": _("निकासी"),
+            "datatype": "Int",
+            "indicator": "Orange",
+        },
+    ]
+
+
 def execute(filters=None):
-    """Run the IRD Sales Register and return columns plus rows."""
+    """Run the IRD Sales Register and return columns, rows, and summary."""
     columns = get_columns()
     data = get_data(filters)
-    return columns, data
+    summary = get_sales_register_summary(data)
+    return columns, data, None, None, summary
+
 
 def get_columns():
     """Column definitions for the IRD Sales Register."""
@@ -41,6 +81,7 @@ def get_columns():
         {"label": _("निकासी प्रज्ञापनपत्र नम्बर"), "fieldname": "Export Declaration Number", "fieldtype": "Data", "width": 140},
         {"label": _("निकासी प्रज्ञापनपत्र मिति"), "fieldname": "Export Declaration Date", "fieldtype": "Data", "width": 140},
     ]
+
 
 def get_data(filters):
     """Build sales register rows from submitted invoices in the filter range."""
@@ -91,7 +132,7 @@ def get_data(filters):
         is_export = is_foreign_country(customer_country)
 
         pan = inv.invoice_pan or inv.customer_tax_id
-        
+
         tax_exempt = taxable_domestic_nc = taxable_import_nc = capital_taxable_amount = 0.0
         tax_domestic_nc = 0.0
 
