@@ -13,6 +13,7 @@ from nepal_compliance.ird_filters import (
 from nepal_compliance.utils import (
     distribute_item_vat,
     get_vat_breakup,
+    invoice_ird_total,
     is_exempt_report_item,
     item_taxable_amount,
     resolve_report_vat_source,
@@ -71,7 +72,7 @@ def get_data(filters):
     conditions_sql = " AND ".join(conditions)
     query = """
         SELECT
-            pi.name as invoice, pi.bill_no, pi.customs_declaration_number, pi.reason, pi.rounded_total, pi.grand_total, pi.posting_date, pi.supplier_name, pi.supplier, pi.tax_id as invoice_pan,
+            pi.name as invoice, pi.bill_no, pi.customs_declaration_number, pi.reason, pi.rounded_total, pi.grand_total, pi.summary_grand_total, pi.posting_date, pi.supplier_name, pi.supplier, pi.tax_id as invoice_pan,
             pi.total, pi.company, pi.taxable_amount as stored_taxable_amount, pi.item_vat_detail as stored_item_vat_detail,
             pi.ird_party_country as stored_party_country,
             supplier_address.country as address_country,
@@ -156,7 +157,7 @@ def get_data(filters):
             "reason": inv.reason or "",
 			"qty": abs(sum(item.qty for item in items if item.qty)) if items else 0.0, 
             "uom": item.uom if items else "",
-            "total": abs(inv.rounded_total or inv.grand_total),
+            "total": abs(invoice_ird_total(inv)),
             "tax_exempt": abs(tax_exempt),
             "taxable_amount": abs(taxable_domestic_nc),
             "tax_amount": abs(tax_domestic_nc),

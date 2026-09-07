@@ -12,6 +12,7 @@ from nepal_compliance.ird_filters import (
 from nepal_compliance.utils import (
     distribute_item_vat,
     get_vat_breakup,
+    invoice_ird_total,
     is_exempt_report_item,
     item_taxable_amount,
     resolve_report_vat_source,
@@ -69,6 +70,7 @@ def get_data(filters):
             si.name as invoice,
             si.rounded_total,
             si.grand_total,
+            si.summary_grand_total,
             si.posting_date,
             si.customer_name,
             si.tax_id as pan,
@@ -157,14 +159,14 @@ def get_data(filters):
             "name": "",
             "qty": abs(total_qty),
             "uom": "",
-            "total": abs(flt(inv.rounded_total or inv.grand_total)),
+            "total": abs(flt(invoice_ird_total(inv))),
             "tax_exempt": abs(flt(tax_exempt_total)),
             "taxable_amount": abs(flt(taxable_total)),
             "tax_amount": abs(flt(tax_total)),
         })
 
         grand_qty += abs(total_qty)
-        grand_total += abs(flt(inv.rounded_total or inv.grand_total))
+        grand_total += abs(flt(invoice_ird_total(inv)))
         grand_tax_exempt += abs(flt(tax_exempt_total))
         grand_taxable += abs(flt(taxable_total))
         grand_tax += abs(flt(tax_total))

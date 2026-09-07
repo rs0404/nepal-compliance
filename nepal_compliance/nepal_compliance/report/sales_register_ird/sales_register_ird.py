@@ -13,6 +13,7 @@ from nepal_compliance.ird_filters import (
 from nepal_compliance.utils import (
     distribute_item_vat,
     get_vat_breakup,
+    invoice_ird_total,
     is_exempt_report_item,
     item_taxable_amount,
     resolve_report_vat_source,
@@ -108,7 +109,7 @@ def get_data(filters):
     query = """
         SELECT
             si.name as invoice, si.rounded_total, si.posting_date, si.customer_name, si.tax_id as invoice_pan, si.customer, si.company,
-            si.total, si.net_total, si.grand_total, si.customs_declaration_number, si.customs_declaration_date_bs,
+            si.total, si.net_total, si.grand_total, si.summary_grand_total, si.customs_declaration_number, si.customs_declaration_date_bs,
             si.taxable_amount as stored_taxable_amount, si.item_vat_detail as stored_item_vat_detail,
             si.ird_party_country as stored_party_country,
             billing_address.country as address_country,
@@ -171,7 +172,7 @@ def get_data(filters):
             **invoice_link_fields("Sales Invoice", inv.invoice),
             "customer_name": inv.customer_name,
             "pan": pan,
-            "total": inv.rounded_total or inv.grand_total,
+            "total": invoice_ird_total(inv),
             "tax_exempt": tax_exempt,
             "taxable_amount": taxable_domestic_nc,
             "tax_amount": tax_domestic_nc,

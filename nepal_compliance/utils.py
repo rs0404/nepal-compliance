@@ -379,6 +379,50 @@ def item_taxable_amount(item, row_vat, item_vat_map):
     return taxable_base_from_vat(row_vat, rate, item.get("net_amount"))
 
 
+def tax_row_amount(tax):
+    """Tax amount after discount when set, else tax_amount."""
+    return flt(
+        tax.tax_amount_after_discount_amount
+        if tax.tax_amount_after_discount_amount is not None
+        else tax.tax_amount
+    )
+
+
+def is_purchase_tds_row(tax, vat_account=None):
+    """True when a Purchase Invoice tax row is TDS (withholding or Deduct).
+
+    Nepal TDS rates are not fixed, so rows are identified by ERPNext's
+    withholding/deduct flags, never by rate. The configured VAT account is
+    never treated as TDS.
+    """
+    if vat_account and tax.account_head == vat_account:
+        return False
+    return bool(tax.get("is_tax_withholding_account")) or tax.get("add_deduct_tax") == "Deduct"
+
+
+def get_tds_amount(doc, vat_account=None):
+    """Sum Purchase Invoice TDS (signed, so returns stay negative)."""
+    if doc.doctype != "Purchase Invoice":
+        return 0.0
+    tds_amount = 0.0
+    for tax in doc.get("taxes") or []:
+        if is_purchase_tds_row(tax, vat_account):
+            tds_amount += tax_row_amount(tax)
+    return tds_amount
+
+
+def set_bill_total(doc, vat_account=None):
+    """Bill Total is grand_total, plus TDS on Purchase Invoice (TDS is deducted from grand_total)."""
+    doc.summary_grand_total = flt(doc.grand_total) + get_tds_amount(doc, vat_account)
+
+
+def invoice_ird_total(inv):
+    """IRD register total: Taxable Summary Bill Total, else rounded/grand total."""
+    if inv.get("summary_grand_total") is not None:
+        return flt(inv.summary_grand_total)
+    return flt(inv.rounded_total) or flt(inv.grand_total)
+
+
 def set_taxable_amounts(doc, method):
     """Freeze taxable, non-taxable, VAT, and item VAT detail on the invoice."""
     side = "sales" if doc.doctype == "Sales Invoice" else "purchase"
@@ -392,9 +436,7 @@ def set_taxable_amounts(doc, method):
         doc.non_taxable_amount = None
         doc.vat_amount = None
         doc.item_vat_detail = None
-        doc.summary_grand_total = (
-            flt(doc.grand_total) if doc.get("disable_rounded_total") else (flt(doc.rounded_total) or flt(doc.grand_total))
-        )
+        set_bill_total(doc, vat_account)
         return
 
     item_vat = {}
@@ -402,11 +444,7 @@ def set_taxable_amounts(doc, method):
     for tax in doc.get("taxes") or []:
         if tax.account_head != vat_account:
             continue
-        vat_amount += flt(
-            tax.tax_amount_after_discount_amount
-            if tax.tax_amount_after_discount_amount is not None
-            else tax.tax_amount
-        )
+        vat_amount += tax_row_amount(tax)
         add_item_wise_vat(item_vat, tax.item_wise_tax_detail)
 
     taxable_amount = non_taxable_amount = 0.0
@@ -423,9 +461,7 @@ def set_taxable_amounts(doc, method):
     doc.non_taxable_amount = non_taxable_amount
     doc.vat_amount = vat_amount
     doc.item_vat_detail = json.dumps(item_vat)
-    doc.summary_grand_total = (
-        flt(doc.grand_total) if doc.get("disable_rounded_total") else (flt(doc.rounded_total) or flt(doc.grand_total))
-    )
+    set_bill_total(doc, vat_account)
 
 def get_vat_breakup(invoice_doctype, invoice_company_map):
     """

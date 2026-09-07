@@ -16,6 +16,7 @@ from nepal_compliance.nepali_date_utils.nepali_date import ad_to_bs
 from nepal_compliance.utils import (
     distribute_item_vat,
     get_vat_breakup,
+    invoice_ird_total,
     is_exempt_report_item,
     item_taxable_amount,
     resolve_report_vat_source,
@@ -169,7 +170,7 @@ def get_data(filters, bucket="all"):
 
     query = """
         SELECT
-            pi.name as invoice, pi.bill_no, pi.bill_date, pi.customs_declaration_number, pi.rounded_total, pi.grand_total, pi.posting_date,
+            pi.name as invoice, pi.bill_no, pi.bill_date, pi.customs_declaration_number, pi.rounded_total, pi.grand_total, pi.summary_grand_total, pi.posting_date,
             pi.supplier_name, pi.tax_id as invoice_pan, pi.total, pi.supplier, pi.company,
             pi.taxable_amount as stored_taxable_amount, pi.item_vat_detail as stored_item_vat_detail,
             pi.ird_party_country as stored_party_country,
@@ -246,7 +247,7 @@ def get_data(filters, bucket="all"):
             "customs_declaration_number": inv.customs_declaration_number if is_import else "",
             "supplier_name": inv.supplier_name,
             "pan": pan,
-            "total": inv.rounded_total or inv.grand_total,
+            "total": invoice_ird_total(inv),
             "tax_exempt": tax_exempt,
             "taxable_amount": taxable_domestic_nc,
             "tax_amount": tax_domestic_nc,

@@ -93,7 +93,7 @@ def create_custom_fields(quiet=False):
             {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "taxable_summary_col_break", "fieldtype": "Column Break", "insert_after": "non_taxable_amount"},
             {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "summary_grand_total", "label": "Grand Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "item_vat_detail", "label": "Item VAT Detail", "fieldtype": "Long Text", "insert_after": "summary_grand_total", "hidden": 1, "read_only": 1, "allow_on_submit": 1}
         ],
         "Sales Order":[
@@ -116,7 +116,7 @@ def create_custom_fields(quiet=False):
             {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "taxable_summary_col_break", "fieldtype": "Column Break", "insert_after": "non_taxable_amount"},
             {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "summary_grand_total", "label": "Grand Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "item_vat_detail", "label": "Item VAT Detail", "fieldtype": "Long Text", "insert_after": "summary_grand_total", "hidden": 1, "read_only": 1, "allow_on_submit": 1}
         ],
         "Delivery Note":[
@@ -330,7 +330,10 @@ def create_custom_fields(quiet=False):
 
     for doctype_name, fields in custom_fields.items():
         for field in fields:
-            if not frappe.db.exists("Custom Field", {"dt": doctype_name, "fieldname": field["fieldname"]}):
+            existing_name = frappe.db.exists(
+                "Custom Field", {"dt": doctype_name, "fieldname": field["fieldname"]}
+            )
+            if not existing_name:
                 custom_field = frappe.get_doc({
                     "doctype": "Custom Field",
                     "dt": doctype_name,
@@ -345,11 +348,15 @@ def create_custom_fields(quiet=False):
                         )
                     )
                 created_fields.append({"dt": doctype_name, "fieldname": field["fieldname"]})
-            elif not quiet:
-                frappe.msgprint(
-                    _("Field '{0}' already exists in {1}.").format(
-                        field.get("label") or field["fieldname"], doctype_name
+            else:
+                new_label = field.get("label")
+                if new_label and frappe.db.get_value("Custom Field", existing_name, "label") != new_label:
+                    frappe.db.set_value("Custom Field", existing_name, "label", new_label)
+                elif not quiet:
+                    frappe.msgprint(
+                        _("Field '{0}' already exists in {1}.").format(
+                            field.get("label") or field["fieldname"], doctype_name
+                        )
                     )
-                )
 
     return created_fields
