@@ -8,6 +8,11 @@ from frappe.model.document import Document
 from frappe.utils import flt
 import redis
 
+from nepal_compliance.utils import (
+    get_or_create_vat_exempt_template,
+    sync_managed_vat_taxable_templates,
+)
+
 
 class NepalComplianceSettings(Document):
     def validate(self):
@@ -61,6 +66,9 @@ class NepalComplianceSettings(Document):
                         updated.append(template_name)
                     elif result == "skipped":
                         skipped.append(template_name)
+                side = "sales" if doctype.startswith("Sales") else "purchase"
+                sync_managed_vat_taxable_templates(row.company, account, side)
+                get_or_create_vat_exempt_template(row.company, account, side)
         if updated:
             frappe.msgprint(
                 _("VAT rows in the following tax templates were updated to the configured accounts: {0}").format(

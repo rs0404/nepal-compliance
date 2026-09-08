@@ -9,6 +9,9 @@ frappe.ui.form.on("Nepal Compliance Settings", {
 		frm.add_custom_button(__("Recompute Taxable Summary"), () => {
 			open_date_prompt();
 		});
+		frm.add_custom_button(__("Audit TDS Bases"), () => {
+			open_tds_base_prompt();
+		});
 	},
 });
 
@@ -364,5 +367,166 @@ function run_apply(values) {
 			delete frappe._taxable_summary_apply_pending[request_id];
 			frappe.hide_progress();
 		},
+	});
+}
+
+function open_tds_base_prompt() {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Audit TDS Bases"),
+		fields: [
+			{
+				fieldname: "fiscal_year",
+				fieldtype: "Link",
+				options: "Fiscal Year",
+				label: __("Fiscal Year"),
+				onchange() {
+					const fiscal_year = dialog.get_value("fiscal_year");
+					if (!fiscal_year) return;
+					frappe.db.get_value(
+						"Fiscal Year",
+						fiscal_year,
+						["year_start_date", "year_end_date"],
+						(values) => {
+							dialog.set_value("from_date", values.year_start_date);
+							dialog.set_value("to_date", values.year_end_date);
+						}
+					);
+				},
+			},
+			{
+				fieldname: "from_date",
+				fieldtype: "Date",
+				label: __("From Posting Date"),
+				reqd: 1,
+			},
+			{
+				fieldname: "to_date",
+				fieldtype: "Date",
+				label: __("To Posting Date"),
+				reqd: 1,
+			},
+			{
+				fieldname: "help",
+				fieldtype: "HTML",
+				options: `<p class="text-muted">${__(
+					"Preview compares submitted Purchase Invoice TDS bases only. Applying changes the two cumulative-threshold base fields and adds an audit comment; it does not change historical TDS, VAT, or GL entries."
+				)}</p>`,
+			},
+		],
+		primary_action_label: __("Preview"),
+		primary_action(values) {
+			dialog.hide();
+			preview_tds_bases(values);
+		},
+	});
+	dialog.show();
+}
+
+function preview_tds_bases(values) {
+	listen_for_tds_backfill();
+	frappe._tds_base_preview_values = values;
+	frappe.call({
+		method: "nepal_compliance.tds_base_backfill.preview_tds_base_backfill",
+		args: values,
+		freeze: true,
+		freeze_message: __("Auditing TDS bases..."),
+		callback(r) {
+			if (!r.message) return;
+			if (r.message.queued) {
+				frappe.msgprint(
+					r.message.duplicate
+						? __("This TDS-base preview is already running.")
+						: __("The TDS-base preview is running in the background.")
+				);
+				return;
+			}
+			show_tds_base_preview(r.message, values);
+		},
+	});
+}
+
+function listen_for_tds_backfill() {
+	if (frappe._tds_base_listener) return;
+	frappe._tds_base_listener = true;
+	frappe.realtime.on("tds_base_backfill_preview_done", (result) => {
+		const values = frappe._tds_base_preview_values;
+		if (values) show_tds_base_preview(result, values);
+	});
+	frappe.realtime.on("tds_base_backfill_apply_done", show_tds_base_apply_result);
+}
+
+function show_tds_base_preview(result, values) {
+	const exceptions = (result.exceptions || [])
+		.map((row) => {
+			const reason = row.reason || __("Wrong historical VAT ledger: {0}", [
+				row.wrong_vat_account,
+			]);
+			return `<li>${frappe.utils.escape_html(row.name)}: ${frappe.utils.escape_html(
+				reason
+			)}</li>`;
+		})
+		.join("");
+	const dialog = new frappe.ui.Dialog({
+		title: __("Confirm TDS-Base Backfill"),
+		fields: [
+			{
+				fieldname: "summary",
+				fieldtype: "HTML",
+				options: `
+					<p>${__("Only TDS base fields will be updated. Historical tax and accounting entries remain unchanged.")}</p>
+					<ul>
+						<li>${__("Scanned")}: <b>${result.scanned}</b></li>
+						<li>${__("Would change")}: <b>${result.changed}</b></li>
+						<li>${__("Unchanged")}: <b>${result.unchanged}</b></li>
+						<li>${__("Category option off")}: <b>${result.option_off}</b></li>
+						<li>${__("Unavailable VAT data")}: <b>${result.unavailable}</b></li>
+						<li>${__("Wrong historical VAT ledger")}: <b>${result.wrong_ledger}</b></li>
+						<li>${__("Permission denied")}: <b>${result.denied}</b></li>
+						<li>${__("Failed")}: <b>${result.failed}</b></li>
+					</ul>
+					${exceptions ? `<p><b>${__("Accounting review required")}</b></p><ul>${exceptions}</ul>` : ""}
+				`,
+			},
+		],
+		primary_action_label: result.changed ? __("Apply Approved Backfill") : __("Close"),
+		primary_action() {
+			dialog.hide();
+			if (result.changed) apply_tds_bases(values);
+		},
+	});
+	dialog.show();
+}
+
+function apply_tds_bases(values) {
+	frappe.call({
+		method: "nepal_compliance.tds_base_backfill.apply_tds_base_backfill",
+		args: { ...values, confirmed: 1 },
+		freeze: true,
+		freeze_message: __("Updating approved TDS bases..."),
+		callback(r) {
+			if (!r.message) return;
+			if (r.message.queued) {
+				frappe.msgprint(__("The approved TDS-base backfill is running in the background."));
+				return;
+			}
+			show_tds_base_apply_result(r.message);
+		},
+	});
+}
+
+function show_tds_base_apply_result(result) {
+	frappe.msgprint({
+		title: __("TDS-Base Backfill"),
+		indicator: result.failed || result.denied ? "orange" : "green",
+		message: __(
+			"Updated {0} invoice(s). Wrong ledger: {1}; unavailable: {2}; denied: {3}; failed: {4}.",
+			[
+				result.updated,
+				result.wrong_ledger || 0,
+				result.unavailable || 0,
+				result.denied || 0,
+				result.failed || 0,
+			]
+		),
 	});
 }

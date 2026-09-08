@@ -14,3 +14,5 @@ nepal_compliance.patches.backfill_taxable_summary
 nepal_compliance.patches.sync_ird_party_country_fields
 nepal_compliance.patches.split_vat_exempt_templates
 nepal_compliance.patches.sync_bill_total_label
+nepal_compliance.patches.enable_tds_on_taxable_amount
+nepal_compliance.patches.split_vat_taxable_templates

@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 
 def create_custom_fields(quiet=False):
@@ -8,6 +9,17 @@ def create_custom_fields(quiet=False):
         "Company": [
             {"fieldname": "logo_for_printing", "label": "Logo For Printing", "fieldtype": "Attach", "insert_after": "parent_company"},
             {"fieldname": "company_vat_number", "label": "Vat/Pan Number", "fieldtype": "Data", "insert_after": "default_holiday_list", "allow_on_submit": 1}
+        ],
+        "Tax Withholding Category": [
+            {
+                "fieldname": "calculate_tds_on_taxable_amount",
+                "label": "Calculate TDS on Taxable Amount",
+                "fieldtype": "Check",
+                "insert_after": "round_off_tax_amount",
+                "default": "1",
+                "permlevel": 1,
+                "description": "If checked, Purchase Invoice TDS is calculated on Taxable Amount instead of item net total. Nepal default. Only Accounts Manager can change this.",
+            }
         ],
         "Item": [
             {"fieldname": "is_nontaxable_item", "label": "Is Non-Taxable Item", "fieldtype": "Check", "insert_after": "is_stock_item"},
@@ -349,9 +361,16 @@ def create_custom_fields(quiet=False):
                     )
                 created_fields.append({"dt": doctype_name, "fieldname": field["fieldname"]})
             else:
+                updates = {}
                 new_label = field.get("label")
                 if new_label and frappe.db.get_value("Custom Field", existing_name, "label") != new_label:
-                    frappe.db.set_value("Custom Field", existing_name, "label", new_label)
+                    updates["label"] = new_label
+                if "permlevel" in field:
+                    current = cint(frappe.db.get_value("Custom Field", existing_name, "permlevel"))
+                    if current != cint(field["permlevel"]):
+                        updates["permlevel"] = cint(field["permlevel"])
+                if updates:
+                    frappe.db.set_value("Custom Field", existing_name, updates)
                 elif not quiet:
                     frappe.msgprint(
                         _("Field '{0}' already exists in {1}.").format(

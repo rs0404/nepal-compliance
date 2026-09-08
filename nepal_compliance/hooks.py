@@ -168,6 +168,7 @@ override_doctype_class = {  # nosemgrep: frappe-semgrep-rules.rules.override-doc
     "Payroll Entry": "nepal_compliance.overrides.salary_slip.CustomPayrollEntry",
     "Leave Policy Assignment": "nepal_compliance.custom_code.leave_allocation.monthly_leave_bs.LeavePolicyAssignment",
     "Asset Depreciation Schedule": "nepal_compliance.overrides.asset_depreciation_schedule.CustomAssetDepreciationSchedule",
+    "Purchase Invoice": "nepal_compliance.overrides.purchase_invoice.CustomPurchaseInvoice",
 }
 
 # Document Events
@@ -177,10 +178,19 @@ doc_events = {
     "*": {
         "validate": "nepal_compliance.backdated_doctype_restriction.validate_backdate_and_sequence"
     },
+    "Item": {
+        "validate": "nepal_compliance.utils.ensure_side_specific_item_tax_mappings",
+    },
+    "Item Group": {
+        "validate": "nepal_compliance.utils.ensure_side_specific_item_tax_mappings",
+    },
     "Purchase Invoice" : {
         "on_trash": "nepal_compliance.utils.prevent_invoice_deletion",
         "before_insert": "nepal_compliance.utils.set_vat_numbers",
-        "before_validate": "nepal_compliance.utils.apply_vat_exemption_for_nontaxable_items",
+        "before_validate": [
+            "nepal_compliance.utils.apply_side_specific_vat_template",
+            "nepal_compliance.utils.apply_vat_exemption_for_nontaxable_items",
+        ],
         "validate": [
             "nepal_compliance.ird_country.set_invoice_party_country",
             "nepal_compliance.utils.set_taxable_amounts",
@@ -192,7 +202,10 @@ doc_events = {
     "Sales Invoice" : {
         "autoname": "nepal_compliance.utils.custom_autoname",
         "before_insert": "nepal_compliance.utils.set_vat_numbers",
-        "before_validate": "nepal_compliance.utils.apply_vat_exemption_for_nontaxable_items",
+        "before_validate": [
+            "nepal_compliance.utils.apply_side_specific_vat_template",
+            "nepal_compliance.utils.apply_vat_exemption_for_nontaxable_items",
+        ],
         "on_submit": "nepal_compliance.cbms_api.post_sales_invoice_or_return_to_cbms",
         "validate": [
             "nepal_compliance.ird_country.set_invoice_party_country",

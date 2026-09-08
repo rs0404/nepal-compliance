@@ -152,11 +152,177 @@ def get_configured_vat_accounts():
     return accounts
 
 VAT_EXEMPT_TEMPLATE_TITLE = "VAT Exempt"
+VAT_TAXABLE_TEMPLATE_TITLE = "Nepal Tax"
 
 
 def vat_exempt_template_title(side):
     """Return the stable side-specific title for a VAT-exempt template."""
     return f"{VAT_EXEMPT_TEMPLATE_TITLE} ({'Sales' if side == 'sales' else 'Purchase'})"
+
+
+def format_vat_rate(rate):
+    """Return a stable compact rate string for Item Tax Template titles."""
+    value = flt(rate)
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def vat_taxable_template_title(side, rate):
+    """Return the stable side-and-rate-specific taxable VAT template title."""
+    label = "Sales" if side == "sales" else "Purchase"
+    return f"{VAT_TAXABLE_TEMPLATE_TITLE} ({label} - {format_vat_rate(rate)}%)"
+
+
+def get_or_create_vat_taxable_template(company, vat_account, side, rate):
+    """Return a side-and-rate-specific VAT template without changing its rate."""
+    rate = flt(rate)
+    if rate <= 0:
+        frappe.throw(_("Taxable VAT rate must be greater than zero."))
+
+    title = vat_taxable_template_title(side, rate)
+    existing = frappe.get_all(
+        "Item Tax Template",
+        filters={"company": company, "title": title},
+        pluck="name",
+    )
+    taxes = [{"tax_type": vat_account, "tax_rate": rate}]
+    if existing:
+        template = frappe.get_doc("Item Tax Template", existing[0])
+        if len(template.taxes) != 1 or flt(template.taxes[0].tax_rate) != rate:
+            frappe.throw(
+                _("Item Tax Template {0} does not match its VAT rate {1}%.").format(
+                    frappe.bold(template.name), format_vat_rate(rate)
+                )
+            )
+        if template.taxes[0].tax_type != vat_account:
+            template.taxes[0].tax_type = vat_account
+            template.save(ignore_permissions=True)
+        return template.name
+
+    template = frappe.get_doc(
+        {
+            "doctype": "Item Tax Template",
+            "title": title,
+            "company": company,
+            "taxes": taxes,
+        }
+    ).insert(ignore_permissions=True)
+    return template.name
+
+
+def _parse_item_tax_rate(value):
+    """Return an item tax-rate dict without discarding unrelated tax entries."""
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _managed_taxable_template_side(title):
+    """Return sales/purchase for a managed rate-specific template title."""
+    title = title or ""
+    if title.startswith(f"{VAT_TAXABLE_TEMPLATE_TITLE} (Sales - "):
+        return "sales"
+    if title.startswith(f"{VAT_TAXABLE_TEMPLATE_TITLE} (Purchase - "):
+        return "purchase"
+    return None
+
+
+def sync_managed_vat_taxable_templates(company, vat_account, side):
+    """Repoint managed templates to a VAT account while preserving every rate."""
+    prefix = f"{VAT_TAXABLE_TEMPLATE_TITLE} ({'Sales' if side == 'sales' else 'Purchase'} - "
+    names = frappe.get_all(
+        "Item Tax Template",
+        filters={"company": company, "title": ["like", f"{prefix}%"]},
+        pluck="name",
+    )
+    for name in names:
+        template = frappe.get_doc("Item Tax Template", name)
+        if len(template.taxes) != 1 or flt(template.taxes[0].tax_rate) <= 0:
+            continue
+        if template.taxes[0].tax_type != vat_account:
+            template.taxes[0].tax_type = vat_account
+            template.save(ignore_permissions=True)
+
+
+def _legacy_vat_template_rate(template_name, company, vat_accounts):
+    """Return the positive VAT rate for an eligible shared legacy template."""
+    if not template_name:
+        return None
+    template = frappe.get_cached_doc("Item Tax Template", template_name)
+    if template.company != company or _managed_taxable_template_side(template.title):
+        return None
+    if not (template.title or "").startswith(VAT_TAXABLE_TEMPLATE_TITLE):
+        return None
+
+    configured = {account for account in vat_accounts.values() if account}
+    matching = [
+        row for row in template.get("taxes") or []
+        if row.tax_type in configured and flt(row.tax_rate) > 0
+    ]
+    if len(template.get("taxes") or []) != 1 or len(matching) != 1:
+        return None
+    return flt(matching[0].tax_rate)
+
+
+def ensure_side_specific_item_tax_mappings(doc, method=None):
+    """Allow both side/rate templates wherever a shared legacy template is allowed."""
+    if doc.doctype not in ("Item", "Item Group"):
+        return
+
+    companies = get_configured_vat_accounts()
+    existing = {
+        (
+            row.get("item_tax_template"),
+            row.get("tax_category"),
+            row.get("valid_from"),
+            flt(row.get("minimum_net_rate")),
+            flt(row.get("maximum_net_rate")),
+        )
+        for row in doc.get("taxes") or []
+    }
+    additions = []
+    for row in list(doc.get("taxes") or []):
+        template_name = row.get("item_tax_template")
+        if not template_name:
+            continue
+        company = frappe.get_cached_value("Item Tax Template", template_name, "company")
+        vat_accounts = companies.get(company, {})
+        rate = _legacy_vat_template_rate(template_name, company, vat_accounts)
+        if rate is None:
+            continue
+
+        for side in ("sales", "purchase"):
+            account = vat_accounts.get(side)
+            if not account:
+                continue
+            target = get_or_create_vat_taxable_template(company, account, side, rate)
+            key = (
+                target,
+                row.get("tax_category"),
+                row.get("valid_from"),
+                flt(row.get("minimum_net_rate")),
+                flt(row.get("maximum_net_rate")),
+            )
+            if key in existing:
+                continue
+            additions.append(
+                {
+                    "item_tax_template": target,
+                    "tax_category": row.get("tax_category"),
+                    "valid_from": row.get("valid_from"),
+                    "minimum_net_rate": row.get("minimum_net_rate"),
+                    "maximum_net_rate": row.get("maximum_net_rate"),
+                }
+            )
+            existing.add(key)
+
+    for values in additions:
+        doc.append("taxes", values)
 
 
 def get_or_create_vat_exempt_template(company, vat_account, side):
@@ -185,6 +351,81 @@ def get_or_create_vat_exempt_template(company, vat_account, side):
         "taxes": [{"tax_type": vat_account, "tax_rate": 0}],
     }).insert(ignore_permissions=True)
     return template.name
+
+
+def apply_side_specific_vat_template(doc, method):
+    """Replace the opposite-side VAT account on taxable invoice items.
+
+    Legacy ``Nepal Tax`` Item Tax Templates were shared by Sales and Purchase
+    transactions, so their single VAT ledger could only be correct for one
+    side. Preserve each item's VAT rate while moving it to the configured
+    side-specific template and account.
+    """
+    if doc.doctype not in ("Sales Invoice", "Purchase Invoice"):
+        return
+
+    side = "sales" if doc.doctype == "Sales Invoice" else "purchase"
+    accounts = get_configured_vat_accounts().get(doc.company, {})
+    vat_account = accounts.get(side)
+    other_account = accounts.get("purchase" if side == "sales" else "sales")
+    if not vat_account or not other_account or vat_account == other_account:
+        return
+
+    repaired_accounts = set()
+    for item in doc.get("items") or []:
+        detail = _parse_item_tax_rate(item.get("item_tax_rate"))
+        source_template_name = item.get("item_tax_template")
+        if not source_template_name:
+            continue
+        source_template = frappe.get_cached_doc(
+            "Item Tax Template", source_template_name
+        )
+        source_side = _managed_taxable_template_side(source_template.title)
+        legacy_rate = _legacy_vat_template_rate(
+            source_template_name, doc.company, accounts
+        )
+        is_legacy_or_opposite = legacy_rate is not None or (
+            source_side and source_side != side
+        )
+        if not is_legacy_or_opposite:
+            continue
+
+        source_account = (
+            other_account
+            if flt(detail.get(other_account)) > 0
+            else vat_account
+        )
+        rate = flt(detail.get(source_account)) or flt(legacy_rate)
+        if rate <= 0:
+            continue
+        item.item_tax_template = get_or_create_vat_taxable_template(
+            doc.company, vat_account, side, rate
+        )
+        detail.pop(source_account, None)
+        detail[vat_account] = rate
+        item.item_tax_rate = json.dumps(detail)
+        if source_account == other_account:
+            repaired_accounts.add(other_account)
+
+    if not repaired_accounts:
+        return
+
+    # Item Tax Template rows appear on the parent as zero-rate "On Net Total"
+    # rows. Remove only that known legacy shape; preserve manual adjustments.
+    doc.set(
+        "taxes",
+        [
+            tax
+            for tax in (doc.get("taxes") or [])
+            if not (
+                tax.account_head in repaired_accounts
+                and tax.get("charge_type") == "On Net Total"
+                and not flt(tax.get("rate"))
+                and not tax.get("is_tax_withholding_account")
+            )
+        ],
+    )
+
 
 def apply_vat_exemption_for_nontaxable_items(doc, method):
     """Assign the 0% VAT Exempt item tax template to items flagged is_nontaxable_item."""
@@ -462,6 +703,88 @@ def set_taxable_amounts(doc, method):
     doc.vat_amount = vat_amount
     doc.item_vat_detail = json.dumps(item_vat)
     set_bill_total(doc, vat_account)
+
+
+def category_calculates_tds_on_taxable_amount(category_name):
+    """True when the Tax Withholding Category is set to use Purchase Invoice taxable amount."""
+    if not category_name:
+        return False
+    if not frappe.db.has_column("Tax Withholding Category", "calculate_tds_on_taxable_amount"):
+        return False
+    return bool(
+        frappe.db.get_value(
+            "Tax Withholding Category", category_name, "calculate_tds_on_taxable_amount"
+        )
+    )
+
+
+def get_purchase_tds_category(doc):
+    """Return the invoice or supplier Tax Withholding Category."""
+    return doc.get("tax_withholding_category") or frappe.db.get_value(
+        "Supplier", doc.get("supplier"), "tax_withholding_category"
+    )
+
+
+def get_purchase_taxable_tds_base(doc, throw_on_unavailable=True):
+    """Compute the transaction-currency taxable base or report it unavailable."""
+    accounts = get_configured_vat_accounts().get(doc.company, {})
+    vat_account = accounts.get("purchase")
+    reason = None
+    if not vat_account:
+        reason = _("Purchase VAT Account is not configured for company {0}.").format(
+            frappe.bold(doc.company)
+        )
+    elif not any(
+        tax.get("account_head") == vat_account for tax in doc.get("taxes") or []
+    ):
+        reason = _(
+            "No Purchase VAT row using {0} was found, so Taxable Amount cannot be verified."
+        ).format(frappe.bold(vat_account))
+
+    if reason:
+        if throw_on_unavailable:
+            frappe.throw(
+                _(
+                    "Nepal Compliance cannot calculate TDS on Taxable Amount. {0} "
+                    "Correct the VAT configuration or invoice taxes; net total will not be used as a fallback."
+                ).format(reason),
+                title=_("TDS Taxable Base Unavailable"),
+            )
+        return None, reason
+
+    set_taxable_amounts(doc, None)
+    if doc.get("taxable_amount") is None:
+        reason = _("The invoice Taxable Amount could not be calculated.")
+        if throw_on_unavailable:
+            frappe.throw(reason, title=_("TDS Taxable Base Unavailable"))
+        return None, reason
+    return flt(doc.taxable_amount), None
+
+
+def apply_taxable_amount_as_tds_base(doc):
+    """Point ERPNext withholding at taxable_amount when the category asks for it.
+
+    Must run after taxes have been calculated so VAT (and thus taxable amount)
+    is available, and before set_tax_withholding reads tax_withholding_net_total.
+    """
+    if doc.doctype != "Purchase Invoice" or not doc.get("apply_tds"):
+        return False
+    category = get_purchase_tds_category(doc)
+    if not category_calculates_tds_on_taxable_amount(category):
+        return False
+
+    taxable, _reason = get_purchase_taxable_tds_base(doc)
+    doc.tax_withholding_net_total = taxable
+    precision = (
+        doc.precision("base_tax_withholding_net_total")
+        if hasattr(doc, "precision")
+        else None
+    )
+    doc.base_tax_withholding_net_total = flt(
+        taxable * flt(doc.get("conversion_rate") or 1), precision
+    )
+    return True
+
 
 def get_vat_breakup(invoice_doctype, invoice_company_map):
     """

@@ -7,11 +7,13 @@ from nepal_compliance.custom_code.payroll.payroll_settings import modify_email_s
 from nepal_compliance.custom_code.leave_type.leave_type import setup_default_leave_types
 from nepal_compliance.custom_code.print_settings import print_cancelled_invoice
 from nepal_compliance.custom_code.payroll.salary_component import create_multiple_salary_components
+from nepal_compliance.tds_withholding import setup_tds_on_taxable_amount_permissions
 
 def install():
     """Create custom fields, property setters, and default Nepal Compliance data."""
     create_custom_fields()
     create_property_setters()
+    setup_tds_on_taxable_amount_permissions()
     create_multiple_salary_components()
     create_income_tax_slabs_for_all_companies()
     modify_email_salary_slip_default()
