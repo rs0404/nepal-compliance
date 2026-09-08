@@ -455,6 +455,36 @@ def apply_vat_exemption_for_nontaxable_items(doc, method):
         item.item_tax_template = template_name
         item.item_tax_rate = json.dumps({vat_account: 0})
 
+
+def apply_pan_bill_vat_override(doc):
+    """Set configured VAT to zero for a PAN/abbreviated Purchase Invoice."""
+    if doc.doctype != "Purchase Invoice" or not doc.get(
+        "is_pan_or_abbreviated_bill"
+    ):
+        return
+
+    accounts = get_configured_vat_accounts().get(doc.company, {})
+    vat_account = accounts.get("purchase")
+    if not vat_account:
+        frappe.throw(
+            _(
+                "Purchase VAT Account is required in Nepal Compliance Settings "
+                "before a PAN/Abbreviated Bill can suppress VAT."
+            ),
+            title=_("Purchase VAT Account Not Configured"),
+        )
+
+    configured_vat_accounts = {
+        account for account in accounts.values() if account
+    }
+    for item in doc.get("items") or []:
+        detail = _parse_item_tax_rate(item.get("item_tax_rate"))
+        for account in configured_vat_accounts:
+            detail.pop(account, None)
+        detail[vat_account] = 0
+        item.item_tax_rate = json.dumps(detail)
+
+
 @frappe.whitelist()
 def is_purchase_invoice_attachment_required():
     """True when Nepal Compliance Settings requires a purchase invoice attachment."""
@@ -729,6 +759,10 @@ def get_purchase_taxable_tds_base(doc, throw_on_unavailable=True):
     """Compute the transaction-currency taxable base or report it unavailable."""
     accounts = get_configured_vat_accounts().get(doc.company, {})
     vat_account = accounts.get("purchase")
+    if doc.get("is_pan_or_abbreviated_bill"):
+        set_taxable_amounts(doc, None)
+        return flt(doc.get("summary_grand_total")), None
+
     reason = None
     if not vat_account:
         reason = _("Purchase VAT Account is not configured for company {0}.").format(
