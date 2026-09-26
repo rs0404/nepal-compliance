@@ -135,3 +135,18 @@ def apply_customer_tds(doc, method=None):
                 "description": _("TDS withheld by customer on {0}").format(", ".join(invoices)),
             },
         )
+
+
+@frappe.whitelist()
+def get_invoice_tds(company: str, invoices: str | list, payment_entry: str | None = None) -> dict:
+    """Return {invoice: TDS still to be booked}, for the Payment Entry form."""
+    frappe.has_permission("Payment Entry", "create", throw=True)
+    names = [
+        name
+        for name in frappe.parse_json(invoices) or []
+        if frappe.has_permission("Sales Invoice", "read", name)
+    ]
+    if not names:
+        return {}
+    doc = frappe._dict(company=company, name=payment_entry or "")
+    return {name: tds for name, (tds, _rate) in _tds_by_invoice(doc, names, 2).items()}
