@@ -177,6 +177,21 @@ class TestPickRequiredFields(unittest.TestCase):
         )
 
 
+class TestExtraFieldOptions(unittest.TestCase):
+    @patch("nepal_compliance.form_layout.frappe.has_permission", create=True)
+    @patch("nepal_compliance.form_layout._mandatory_dimensions", return_value=["branch"])
+    @patch("nepal_compliance.form_layout._required_fields")
+    @patch("nepal_compliance.form_layout.get_extra_field_candidates")
+    def test_required_fields_come_first_with_their_reason(self, candidates, required, _dimensions, _perm):
+        candidates.return_value = {"project": "Project", "branch": "Branch", "amended_from": "Amended From"}
+        required.return_value = [{"fieldname": "branch", "label": "Branch", "reason": "Mandatory accounting dimension"}]
+        options = form_layout.get_extra_field_options("Sales Invoice")
+        self.assertEqual([o["value"] for o in options], ["branch", "amended_from", "project"])
+        self.assertEqual(options[0]["description"], "Required: Mandatory accounting dimension")
+        self.assertIsNone(options[1]["description"])
+        self.assertEqual(options[2]["label"], "Project (project)")
+
+
 class TestExtraFieldCandidates(unittest.TestCase):
     @patch("nepal_compliance.form_layout.frappe.get_meta")
     def test_offers_only_fields_outside_the_tab(self, get_meta):

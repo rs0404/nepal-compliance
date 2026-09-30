@@ -52,7 +52,8 @@ frappe.ui.form.on("Nepal Essentials Field", {
 	},
 });
 
-// Field options depend on the row's form, so each row's picker is filled when it opens.
+// Field options depend on the row's form, so each row's picker is filled when it opens:
+// required fields first, and typing filters by label, fieldname or reason.
 const essentials_field_options = {};
 
 async function set_essentials_field_options(frm, cdn) {
@@ -69,8 +70,13 @@ async function set_essentials_field_options(frm, cdn) {
 		});
 		essentials_field_options[row.document_type] = message || [];
 	}
-	field.df.options = essentials_field_options[row.document_type] || [];
-	field.refresh();
+	const options = essentials_field_options[row.document_type] || [];
+	field.df.options = options;
+	field.set_data(options);
+	if (field.awesomplete) {
+		// Autocomplete shows 99 matches by default; a form has more fields than that
+		field.awesomplete.maxItems = options.length;
+	}
 }
 
 const TAX_TEMPLATE_VARIANTS = [
