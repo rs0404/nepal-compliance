@@ -44,7 +44,10 @@
   "party_tax_rules_section",
   "customer_tax_id_rules",
   "party_tax_rules_column",
-  "supplier_tax_id_rules"
+  "supplier_tax_id_rules",
+  "printing_tab",
+  "print_seal_section",
+  "print_seals"
  ],
  "fields": [
   {
@@ -289,12 +292,29 @@
    "fieldtype": "Table",
    "label": "Supplier Types or Groups",
    "options": "Nepal Compliance Supplier Tax Rule"
+  },
+  {
+   "fieldname": "printing_tab",
+   "fieldtype": "Tab Break",
+   "label": "Printing"
+  },
+  {
+   "description": "Choose, per print format, whether submitted invoices print the company stamp and the signature of the user who submitted them. The stamp comes from Company > Company Stamp and the signature from the submitting user's profile (User > Signature). A print format without a row prints neither. Sizes and offsets are in mm; positive offsets move right and down from the signature line.",
+   "fieldname": "print_seal_section",
+   "fieldtype": "Section Break",
+   "label": "Invoice Stamp & Signature"
+  },
+  {
+   "fieldname": "print_seals",
+   "fieldtype": "Table",
+   "label": "Print Formats",
+   "options": "Nepal Compliance Print Seal"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-26 14:00:00.000000",
+ "modified": "2026-10-04 06:11:12.000000",
  "modified_by": "Administrator",
  "module": "Nepal Compliance",
  "name": "Nepal Compliance Settings",

@@ -215,7 +215,10 @@ doc_events = {
             "nepal_compliance.utils.apply_side_specific_vat_template",
             "nepal_compliance.utils.apply_vat_exemption_for_nontaxable_items",
         ],
-        "before_submit": "nepal_compliance.utils.require_manual_sales_invoice_attachment",
+        "before_submit": [
+            "nepal_compliance.utils.require_manual_sales_invoice_attachment",
+            "nepal_compliance.utils.set_signed_by",
+        ],
         "on_submit": "nepal_compliance.cbms_api.post_sales_invoice_or_return_to_cbms",
         "validate": [
             "nepal_compliance.ird_country.set_invoice_party_country",
