@@ -9,7 +9,7 @@ def create_custom_fields(quiet=False):
         "Company": [
             {"fieldname": "logo_for_printing", "label": "Logo For Printing", "fieldtype": "Attach", "insert_after": "parent_company"},
             {"fieldname": "company_stamp", "label": "Company Stamp", "fieldtype": "Attach Image", "insert_after": "logo_for_printing",
-            "description": "Printed on submitted invoices when enabled for the print format in Nepal Compliance Settings. A transparent PNG works best."},
+            "description": "Printed on submitted invoices when enabled for the print format in Nepal Compliance Settings. Kept as a private file that only System Managers can download. A transparent PNG works best."},
             {"fieldname": "company_vat_number", "label": "Vat/Pan Number", "fieldtype": "Data", "insert_after": "default_holiday_list", "allow_on_submit": 1}
         ],
         "Tax Withholding Category": [
@@ -41,7 +41,7 @@ def create_custom_fields(quiet=False):
             {"fieldname": "use_ad_date", "label": "Use Ad Date", "fieldtype": "Check", "insert_after": "username",
             "description": "<b>Disclaimer:</b> Checking this means you prefer using the default date picker (AD format) as your preferred format."},
             {"fieldname": "signature_image", "label": "Signature", "fieldtype": "Attach Image", "insert_after": "use_ad_date",
-            "description": "Printed on Sales Invoices you submit, when enabled for the print format in Nepal Compliance Settings. A transparent PNG works best."},
+            "description": "Printed on Sales Invoices you submit, when enabled for the print format in Nepal Compliance Settings. Kept as a private file that only you and System Managers can download. A transparent PNG works best."},
         ],
         "Employee": [
             {"fieldname": "revised_salary", "label": "Revised Salary", "fieldtype": "Currency", "insert_after": "payroll_cost_center", "reqd": 0, "allow_on_submit": 1},

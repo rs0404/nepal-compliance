@@ -110,7 +110,8 @@ doctype_list_js = {
 jinja = {
     "methods": ["nepal_compliance.nepali_date_utils.nepali_date.format_bs",
                 "nepal_compliance.nepali_date_utils.nepali_date.format_bs_datetime",
-                "nepal_compliance.nepali_date_utils.utils.bs_date"
+                "nepal_compliance.nepali_date_utils.utils.bs_date",
+                "nepal_compliance.print_seal.get_print_seal",
                 ]
 }
 
@@ -186,6 +187,13 @@ doc_events = {
     },
     "Item Group": {
         "validate": "nepal_compliance.utils.ensure_side_specific_item_tax_mappings",
+    },
+    "Company": {
+        "validate": "nepal_compliance.print_seal.secure_company_stamp",
+        "on_change": "nepal_compliance.print_seal.detach_company_stamp",
+    },
+    "User": {
+        "validate": "nepal_compliance.print_seal.secure_user_signature",
     },
     "Purchase Invoice" : {
         "on_trash": "nepal_compliance.utils.prevent_invoice_deletion",
