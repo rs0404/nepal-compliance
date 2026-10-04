@@ -62,9 +62,9 @@ boot_session = "nepal_compliance.boot.get_boot_info"
 # include js in doctype views
 doctype_js = {
     "Company": "public/js/validate.js",
-    "Purchase Invoice": "public/js/purchase_invoice.js",
-    "Sales Invoice": "public/js/sales_invoice.js",
-    "Sales Order": "public/js/sales_order.js",
+    "Purchase Invoice": ["public/js/purchase_invoice.js", "public/js/bill_summary.js"],
+    "Sales Invoice": ["public/js/sales_invoice.js", "public/js/bill_summary.js"],
+    "Sales Order": ["public/js/sales_order.js", "public/js/bill_summary.js"],
     "CBMS Settings": "nepal_compliance/doctype/cbms_settings/cbms_settings.js",
     "Supplier": "public/js/validate.js",
     "Customer": "public/js/validate.js",
@@ -118,6 +118,7 @@ jinja = {
 # Installation
 # ------------
 after_install = "nepal_compliance.install.install"
+after_migrate = ["nepal_compliance.form_layout.apply_form_layout"]
 after_sync = ["nepal_compliance.custom_code.payroll.salary_structure.create_salary_structures",
               "nepal_compliance.custom_code.leave_type.leave_type.setup_default_leave_types"]
 

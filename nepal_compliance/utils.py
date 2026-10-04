@@ -582,18 +582,21 @@ def set_taxable_amounts(doc, method, consider_is_non_taxable_item=False):
 
     item_vat = {}
     vat_amount = 0.0
+    vat_divisor = 1.0
     if vat_account:
         for tax in doc.get("taxes") or []:
             if tax.account_head != vat_account:
                 continue
             vat_amount += tax_row_amount(tax)
             add_item_wise_vat(item_vat, tax.item_wise_tax_detail)
+            if tax.get("included_in_print_rate") and flt(tax.get("rate")):
+                vat_divisor = 1 + flt(tax.rate) / 100
 
     items = list(doc.get("items") or [])
     row_vat = distribute_item_vat(items, item_vat)
     include_added_taxes = vat_charged_on_added_taxes(doc, vat_account)
 
-    taxable_amount = non_taxable_amount = 0.0
+    taxable_amount = non_taxable_amount = taxable_discount = 0.0
     force_all_non_taxable = bool(
         doc.get("is_pan_or_abbreviated_bill")
         or (
@@ -615,7 +618,14 @@ def set_taxable_amounts(doc, method, consider_is_non_taxable_item=False):
             )
         if is_non_taxable:
             non_taxable_amount += amt
-        elif include_added_taxes:
+            continue
+        # as printed on the bill: a non-taxable item keeps its discount inside its own amount,
+        # a taxable one shows its item and invoice discount on the Discount line, before VAT
+        item_discount = flt(item.get("discount_amount")) * flt(item.get("qty")) + flt(
+            item.get("distributed_discount_amount")
+        )
+        taxable_discount += item_discount / vat_divisor
+        if include_added_taxes:
             # VAT was charged on net + prior rows (duty/excise). Use VAT ÷ rate
             # so expected VAT is 13% of that same base.
             taxable_amount += item_taxable_amount(item, item_row_vat, item_vat)
@@ -625,6 +635,17 @@ def set_taxable_amounts(doc, method, consider_is_non_taxable_item=False):
     doc.taxable_amount = taxable_amount
     doc.non_taxable_amount = non_taxable_amount
     doc.vat_amount = vat_amount
+    doc.taxable_discount = taxable_discount
+    doc.bill_subtotal = taxable_amount + non_taxable_amount + taxable_discount
+    if doc.doctype in ("Sales Invoice", "Purchase Invoice"):
+        from nepal_compliance.excise import _company_excise_config
+
+        excise_account, record_separately = _company_excise_config(doc.company)
+        if excise_account and record_separately:
+            # a licensed company keeps excise as a tax row; folded excise is set by excise.py
+            doc.excise_amount = sum(
+                tax_row_amount(tax) for tax in doc.get("taxes") or [] if tax.account_head == excise_account
+            )
     if vat_account:
         # Freeze the item-wise VAT alongside the summary. The IRD registers prefer
         # this stored map over a live recompute, so writing it here keeps the
@@ -649,6 +670,33 @@ def set_taxable_amounts(doc, method, consider_is_non_taxable_item=False):
         "has_vat_mismatch": abs(difference) >= 0.01,
         "vat_on_added_taxes": include_added_taxes,
     }
+
+
+BILL_SUMMARY_FIELDS = (
+    "bill_subtotal", "excise_amount", "taxable_discount", "non_taxable_amount", "taxable_amount", "vat_amount",
+    "summary_grand_total",
+)
+
+
+@frappe.whitelist()
+def get_bill_summary(doc: str | dict) -> dict | None:
+    """Bill Summary figures for a form that is still being edited, so they follow the items before a save.
+
+    Runs ERPNext's own totals on the unsaved document, which also spreads the invoice discount
+    over the items, then the same summary the save writes. Nothing is stored.
+    """
+    doc = frappe.get_doc(frappe.parse_json(doc))
+    if doc.doctype not in ("Sales Invoice", "Purchase Invoice", "Sales Order"):
+        frappe.throw(_("A Bill Summary is not available for {0}.").format(_(doc.doctype)))
+    frappe.has_permission(doc.doctype, "write", throw=True)
+    try:
+        doc.calculate_taxes_and_totals()
+        set_taxable_amounts(doc, None)
+    except frappe.ValidationError:
+        # a half-filled form cannot be totalled yet; the save shows the reason
+        frappe.clear_messages()
+        return None
+    return {fieldname: doc.get(fieldname) for fieldname in BILL_SUMMARY_FIELDS}
 
 def get_vat_breakup(invoice_doctype, invoice_company_map):
     """

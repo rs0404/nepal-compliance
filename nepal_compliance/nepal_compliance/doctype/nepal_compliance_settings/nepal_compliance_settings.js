@@ -41,8 +41,50 @@ frappe.ui.form.on("Nepal Compliance Settings", {
 		frm.add_custom_button(__("Create Tax Templates"), () => {
 			open_tax_template_prompt(frm);
 		});
+		if (frm.doc.use_nepal_essentials_tab) {
+			frm.add_custom_button(__("Check Required Fields"), () => {
+				open_required_fields_prompt(frm);
+			});
+		}
 	},
 });
+
+frappe.ui.form.on("Nepal Essentials Field", {
+	form_render(frm, cdt, cdn) {
+		set_essentials_field_options(frm, cdn);
+	},
+	document_type(frm, cdt, cdn) {
+		frappe.model.set_value(cdt, cdn, "fieldname", "");
+		set_essentials_field_options(frm, cdn);
+	},
+});
+
+// Field options depend on the row's form, so each row's picker is filled when it opens:
+// required fields first, and typing filters by label, fieldname or reason.
+const essentials_field_options = {};
+
+async function set_essentials_field_options(frm, cdn) {
+	const row = locals["Nepal Essentials Field"][cdn];
+	const grid_row = frm.fields_dict.essentials_extra_fields.grid.grid_rows_by_docname[cdn];
+	const field = grid_row?.grid_form?.fields_dict.fieldname;
+	if (!row || !field) {
+		return;
+	}
+	if (row.document_type && !essentials_field_options[row.document_type]) {
+		const { message } = await frappe.call({
+			method: "nepal_compliance.form_layout.get_extra_field_options",
+			args: { doctype: row.document_type },
+		});
+		essentials_field_options[row.document_type] = message || [];
+	}
+	const options = essentials_field_options[row.document_type] || [];
+	field.df.options = options;
+	field.set_data(options);
+	if (field.awesomplete) {
+		// Autocomplete shows 99 matches by default; a form has more fields than that
+		field.awesomplete.maxItems = options.length;
+	}
+}
 
 const TAX_TEMPLATE_VARIANTS = [
 	["exclusive", __("VAT 13%")],
@@ -941,4 +983,52 @@ function show_tds_base_apply_result(result) {
 			]
 		),
 	});
+}
+
+// Lists the fields this site made required that are not in Nepal Essentials; the ticked
+// ones become Extra Fields rows. Mandatory dimensions start ticked: submit fails without them.
+async function open_required_fields_prompt(frm) {
+	if (frm.is_dirty()) {
+		frappe.msgprint(__("Save the settings before checking required fields."));
+		return;
+	}
+	const { message } = await frappe.call({ method: "nepal_compliance.form_layout.get_required_fields" });
+	const fields = message || [];
+	if (!fields.length) {
+		frappe.msgprint(__("Every field your organization made required is already in Nepal Essentials."));
+		return;
+	}
+	const doctypes = [...new Set(fields.map((field) => field.doctype))];
+	const dialog = new frappe.ui.Dialog({
+		title: __("Required Fields not in Nepal Essentials"),
+		fields: doctypes.map((doctype) => ({
+			fieldname: frappe.scrub(doctype),
+			fieldtype: "MultiCheck",
+			label: __(doctype),
+			columns: 1,
+			options: fields
+				.filter((field) => field.doctype === doctype)
+				.map((field) => ({
+					label: `${field.label} <span class="text-muted">(${field.reason})</span>`,
+					value: field.fieldname,
+					checked: field.dimension ? 1 : 0,
+				})),
+		})),
+		primary_action_label: __("Add to Nepal Essentials"),
+		primary_action(values) {
+			let added = 0;
+			for (const doctype of doctypes) {
+				for (const fieldname of values[frappe.scrub(doctype)] || []) {
+					frm.add_child("essentials_extra_fields", { document_type: doctype, fieldname });
+					added++;
+				}
+			}
+			dialog.hide();
+			if (added) {
+				frm.refresh_field("essentials_extra_fields");
+				frm.save();
+			}
+		},
+	});
+	dialog.show();
 }
