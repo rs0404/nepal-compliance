@@ -53,6 +53,7 @@
   "default_print_format_section",
   "sales_invoice_print_format",
   "company_print_formats",
+  "attach_invoice_pdf_on_submit",
   "print_seal_section",
   "print_seals"
  ],
@@ -354,6 +355,13 @@
    "options": "Nepal Compliance Company Print Format"
   },
   {
+   "default": "0",
+   "description": "On submit, save the TAX INVOICE PDF of the invoice, in its company's print format above (else the Sales Invoice Print Format), to its Attach Sales Invoice field. A format that prints a Tax Invoice and an Invoice copy attaches only the Tax Invoice. If the format does not print a TAX INVOICE, or the PDF cannot be made, nothing is attached and the invoice is tagged Tax Invoice Not Attached; the tag goes once a file is attached. Invoices that already have a file there, such as a hand bill scan, are left as they are. The PDF is recorded in the Access Log as a print by the submitting user, so later prints are copies.",
+   "fieldname": "attach_invoice_pdf_on_submit",
+   "fieldtype": "Check",
+   "label": "Attach Invoice PDF on Submit"
+  },
+  {
    "description": "Choose, per print format, whether submitted invoices print the company stamp and the signature of the user who submitted them. The stamp comes from Company > Company Stamp and the signature from the submitting user's profile (User > Signature). A print format without a row prints neither. A row with a Company applies only to that company's invoices, ahead of a row for the same format without one. Sizes and offsets are in mm; positive offsets move right and down from the signature line.",
    "fieldname": "print_seal_section",
    "fieldtype": "Section Break",
@@ -369,7 +377,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-10-04 18:33:40.000000",
+ "modified": "2026-10-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Nepal Compliance",
  "name": "Nepal Compliance Settings",
