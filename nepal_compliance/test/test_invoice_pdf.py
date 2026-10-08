@@ -44,8 +44,7 @@ class TestAttachInvoicePdf(unittest.TestCase):
         doc.name = "SINV/082-083/0001"
         doc.get.side_effect = fields.get
         db = MagicMock()
-        db.get_single_value.return_value = enabled
-        db.get_value.return_value = vat_registered
+        db.get_value.return_value = {"attach_invoice_pdf_on_submit": enabled, "vat_registered": vat_registered}
         files = []
 
         def new_file(values):
@@ -73,6 +72,7 @@ class TestAttachInvoicePdf(unittest.TestCase):
         run = self._attach()
 
         run.get_print.assert_called_once_with("Sales Invoice", run.doc.name, "VAT Invoice - Standard", as_pdf=True)
+        self.assertEqual(run.db.get_value.call_args.args[1]["company"], "ABC Traders")  # the setting is per company
         tax, office = run.files
         self.assertEqual((tax["attached_to_field"], tax["file_name"]), ("tax_invoice_attachment", "SINV-082-083-0001-tax-invoice.pdf"))
         self.assertEqual((office["attached_to_field"], office["file_name"]), ("invoice_attachment", "SINV-082-083-0001-invoice.pdf"))
@@ -110,7 +110,7 @@ class TestAttachInvoicePdf(unittest.TestCase):
 
     def test_skipped_cases_render_nothing(self):
         for kwargs in (
-            {"enabled": 0},
+            {"enabled": 0},  # off for this company, or the company has no VAT Accounts row
             {"manual_invoice_no": "1043"},  # the hand bill is the original
             {"tax_invoice_attachment": "/private/files/x.pdf"},
             {"vat_registered": 0, "attach_sales_invoice": "/private/files/hand-bill.jpg"},
@@ -129,7 +129,6 @@ class TestClearNotAttachedTag(unittest.TestCase):
             tags.return_value.get_tags.return_value = ",Invoice PDF Not Attached"
             invoice_pdf.clear_not_attached_tag(doc)
             doc.has_value_changed.return_value = False
-            tags.return_value.get_tags.return_value = ",Invoice PDF Not Attached"
             invoice_pdf.clear_not_attached_tag(doc)
 
         tags.return_value.remove.assert_called_once_with("SINV-1", "Invoice PDF Not Attached")
