@@ -3,6 +3,7 @@ from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import frappe
 from pypdf import PdfReader
 
 from nepal_compliance import invoice_pdf
@@ -39,29 +40,29 @@ BOTH_COPIES = _pdf(["TAX INVOICE", "Invoice No: 1"], ["INVOICE", "Invoice No: 1"
 
 
 class TestAttachInvoicePdf(unittest.TestCase):
-    def _attach(self, vat_registered=1, rendered=BOTH_COPIES, enabled=1, render_error=None, save_error=None, **fields):
-        doc = MagicMock(doctype="Sales Invoice", company="ABC Traders")
+    def _attach(self, vat_registered=1, rendered=BOTH_COPIES, enabled=1, render_error=None, save_error=None,
+                action="submit", **fields):
+        doc = MagicMock(doctype="Sales Invoice", company="ABC Traders", _action=action)
         doc.name = "SINV/082-083/0001"
         doc.get.side_effect = fields.get
         db = MagicMock()
-        db.get_value.return_value = {"attach_invoice_pdf_on_submit": enabled, "vat_registered": vat_registered}
+        db.get_value.return_value = frappe._dict(
+            print_format="VAT Invoice - Standard", attach_invoice_pdf_on_submit=enabled, vat_registered=vat_registered
+        )
         files = []
 
         def new_file(values):
             files.append(values)
             return MagicMock(file_url=f"/private/files/{values['file_name']}", **{"insert.side_effect": save_error})
 
-        frappe = invoice_pdf.frappe
         with patch.object(frappe, "db", db), \
-             patch.object(frappe, "get_meta", return_value=SimpleNamespace(default_print_format=None)), \
              patch.object(frappe, "get_print", return_value=rendered, side_effect=render_error) as get_print, \
              patch.object(frappe, "get_doc", side_effect=new_file), \
              patch.object(frappe, "bold", side_effect=str), \
              patch.object(frappe, "log_error"), \
              patch.object(frappe, "msgprint"), \
-             patch.object(invoice_pdf, "get_sales_invoice_print_format", return_value="VAT Invoice - Standard"), \
              patch.object(invoice_pdf, "DocTags") as tags:
-            invoice_pdf.attach_invoice_pdf(doc, "on_submit")
+            invoice_pdf.attach_invoice_pdf(doc, "on_change")
         return SimpleNamespace(doc=doc, db=db, files=files, get_print=get_print, tags=tags.return_value)
 
     def assertTagged(self, run):
@@ -72,7 +73,8 @@ class TestAttachInvoicePdf(unittest.TestCase):
         run = self._attach()
 
         run.get_print.assert_called_once_with("Sales Invoice", run.doc.name, "VAT Invoice - Standard", as_pdf=True)
-        self.assertEqual(run.db.get_value.call_args.args[1]["company"], "ABC Traders")  # the setting is per company
+        doctype, filters = run.db.get_value.call_args.args[:2]  # the company's Print Format by Company row
+        self.assertEqual((doctype, filters["company"]), ("Nepal Compliance Company Print Format", "ABC Traders"))
         tax, office = run.files
         self.assertEqual((tax["attached_to_field"], tax["file_name"]), ("tax_invoice_attachment", "SINV-082-083-0001-tax-invoice.pdf"))
         self.assertEqual((office["attached_to_field"], office["file_name"]), ("invoice_attachment", "SINV-082-083-0001-invoice.pdf"))
@@ -110,7 +112,9 @@ class TestAttachInvoicePdf(unittest.TestCase):
 
     def test_skipped_cases_render_nothing(self):
         for kwargs in (
-            {"enabled": 0},  # off for this company, or the company has no VAT Accounts row
+            {"action": "update_after_submit"},  # on_change also runs on later saves and on cancel
+            {"action": "cancel"},
+            {"enabled": 0},  # off for this company, or the company has no Print Format by Company row
             {"manual_invoice_no": "1043"},  # the hand bill is the original
             {"tax_invoice_attachment": "/private/files/x.pdf"},
             {"vat_registered": 0, "attach_sales_invoice": "/private/files/hand-bill.jpg"},
