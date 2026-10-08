@@ -8,6 +8,7 @@
  "field_order": [
   "company",
   "vat_registered",
+  "attach_invoice_pdf_on_submit",
   "sales_vat_account",
   "purchase_vat_account",
   "excise_account",
@@ -37,6 +38,13 @@
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "VAT Registered"
+  },
+  {
+   "default": "0",
+   "description": "On submit, save a PDF of this company's Sales Invoices in its print format. If VAT Registered is ticked, the TAX INVOICE copy goes to Tax Invoice and the INVOICE copy to Invoice, so use a format that prints both, such as VAT Invoice - Standard. Otherwise the whole PDF goes to Attach Sales Invoice.",
+   "fieldname": "attach_invoice_pdf_on_submit",
+   "fieldtype": "Check",
+   "label": "Attach Invoice PDF on Submit"
   },
   {
    "fieldname": "sales_vat_account",
@@ -114,7 +122,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-10-08 07:42:54.000000",
+ "modified": "2026-10-08 08:22:07.000000",
  "modified_by": "Administrator",
  "module": "Nepal Compliance",
  "name": "Nepal Compliance VAT Account",

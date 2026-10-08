@@ -24,20 +24,22 @@ PAN_FIELDS = (("attach_sales_invoice", None),)
 
 
 def attach_invoice_pdf(doc, method=None):
-    """Sales Invoice on_submit: attach the invoice PDF when the setting is on.
+    """Sales Invoice on_submit: attach the invoice PDF when its company's VAT Accounts row says so.
 
     Skipped for a manual (hand bill) invoice, whose hand bill is the original,
     and when the target fields already hold a file. Never blocks the submission.
     """
     if doc.doctype != "Sales Invoice" or (doc.get("manual_invoice_no") or "").strip():
         return
-    if not cint(frappe.db.get_single_value(SETTINGS, "attach_invoice_pdf_on_submit")):
-        return
-    vat_registered = cint(frappe.db.get_value(
+    row = frappe.db.get_value(
         "Nepal Compliance VAT Account",
         {"parent": SETTINGS, "parenttype": SETTINGS, "company": doc.company},
-        "vat_registered",
-    ))
+        ["attach_invoice_pdf_on_submit", "vat_registered"],
+        as_dict=True,
+    ) or {}
+    if not cint(row.get("attach_invoice_pdf_on_submit")):
+        return
+    vat_registered = cint(row.get("vat_registered"))
     fields = VAT_FIELDS if vat_registered else PAN_FIELDS
     if any(doc.get(field) for field, _suffix in fields):
         return
@@ -114,9 +116,7 @@ def _save_file(doc, field, suffix, pdf):
 def split_tax_invoice(pdf):
     """Return [tax invoice PDF, invoice PDF], or None unless pdf holds both copies.
 
-    The first page must be titled TAX INVOICE; the INVOICE copy starts at the
-    first later page titled INVOICE. Titles are matched as whole lines, ignoring
-    case and spacing, so "Invoice No" and the like never match.
+    Page titles are whole lines, matched ignoring case and spacing ("Invoice No" never matches).
     """
     reader = PdfReader(BytesIO(pdf))
     titles = [
