@@ -1,7 +1,8 @@
 """Attach the PDF of each submitted Sales Invoice.
 
-Rendered through Frappe's printview like any print, so the Access Log records
-it. A VAT-registered company gets the TAX INVOICE copy in Tax Invoice and the
+Runs on on_change, which Frappe calls on submit only after every app's
+on_submit has finished. Rendered through Frappe's printview like any print, so
+the Access Log records it. A VAT-registered company gets the TAX INVOICE copy in Tax Invoice and the
 INVOICE copy in Invoice; any other company gets the whole PDF in Attach Sales
 Invoice. When that fails, nothing is attached and the invoice is tagged.
 """
@@ -15,8 +16,6 @@ from frappe.desk.doctype.tag.tag import DocTags
 from frappe.utils import cint, strip_html
 from pypdf import PdfReader, PdfWriter
 
-from nepal_compliance.print_seal import get_sales_invoice_print_format
-
 SETTINGS = "Nepal Compliance Settings"
 NOT_ATTACHED_TAG = "Invoice PDF Not Attached"
 VAT_FIELDS = (("tax_invoice_attachment", "tax-invoice"), ("invoice_attachment", "invoice"))
@@ -24,17 +23,18 @@ PAN_FIELDS = (("attach_sales_invoice", None),)
 
 
 def attach_invoice_pdf(doc, method=None):
-    """Sales Invoice on_submit: attach the invoice PDF when its company's VAT Accounts row says so.
+    """Sales Invoice on_change, on submit only: attach the PDF in the company's print format.
 
-    Skipped for a manual (hand bill) invoice, whose hand bill is the original,
-    and when the target fields already hold a file. Never blocks the submission.
+    Uses the company's row in Print Format by Company. Skipped for a manual (hand
+    bill) invoice, whose hand bill is the original, and when the target fields
+    already hold a file. Never blocks the submission.
     """
-    if doc.doctype != "Sales Invoice" or (doc.get("manual_invoice_no") or "").strip():
+    if getattr(doc, "_action", None) != "submit" or (doc.get("manual_invoice_no") or "").strip():
         return
     row = frappe.db.get_value(
-        "Nepal Compliance VAT Account",
+        "Nepal Compliance Company Print Format",
         {"parent": SETTINGS, "parenttype": SETTINGS, "company": doc.company},
-        ["attach_invoice_pdf_on_submit", "vat_registered"],
+        ["print_format", "attach_invoice_pdf_on_submit", "vat_registered"],
         as_dict=True,
     ) or {}
     if not cint(row.get("attach_invoice_pdf_on_submit")):
@@ -44,9 +44,7 @@ def attach_invoice_pdf(doc, method=None):
     if any(doc.get(field) for field, _suffix in fields):
         return
 
-    print_format = (
-        get_sales_invoice_print_format(doc.company) or frappe.get_meta(doc.doctype).default_print_format or "Standard"
-    )
+    print_format = row.print_format
     try:
         pdf = frappe.get_print(doc.doctype, doc.name, print_format, as_pdf=True)
         parts = split_tax_invoice(pdf) if vat_registered else [pdf]
