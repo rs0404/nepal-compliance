@@ -76,6 +76,14 @@ class TestSupplierMatching(unittest.TestCase):
         ranked = bill_scan.rank_suppliers(text, self.suppliers, {}, own_pans={"610000001"})
 
         self.assertEqual(ranked[0]["supplier"], "SUP-A")
+        self.assertFalse(bill_scan.is_confident(ranked))  # a PAN alone may be another party's
+
+    def test_pan_and_name_together_are_confident(self):
+        text = "HIMAL HARDWARE\nPAN: 301234567"
+
+        ranked = bill_scan.rank_suppliers(text, self.suppliers, {})
+
+        self.assertEqual(ranked[0]["supplier"], "SUP-A")
         self.assertTrue(bill_scan.is_confident(ranked))
 
     def test_supplier_without_pan_is_recognised_from_learned_bills(self):

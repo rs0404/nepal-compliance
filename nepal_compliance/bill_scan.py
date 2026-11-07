@@ -251,8 +251,9 @@ def rank_suppliers(text, suppliers, index, own_pans=(), limit=4):
 
 
 def is_confident(candidates):
-    """True when the best supplier is clearly ahead, so the dialog can preselect it."""
-    if not candidates or candidates[0]["score"] < 60:
+    """True when the best supplier is clearly ahead, so the dialog can preselect it. A PAN alone
+    is not enough: bills also print the PAN of a consignor or other party."""
+    if not candidates or candidates[0]["score"] < 75:
         return False
     return len(candidates) == 1 or candidates[0]["score"] - candidates[1]["score"] >= 25
 
