@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-11-07 10:00:00.000000",
+ "description": "Text of a supplier bill read when its Purchase Invoice was created from a photo or PDF. Later bills are matched against these.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "supplier",
+  "company",
+  "purchase_invoice",
+  "column_break_status",
+  "status",
+  "source",
+  "bill_file",
+  "bill_section",
+  "bill_no",
+  "bill_date",
+  "column_break_total",
+  "grand_total",
+  "anchors",
+  "text_section",
+  "ocr_text"
+ ],
+ "fields": [
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Purchase Invoice",
+   "options": "Purchase Invoice",
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Created",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Created\nLearned"
+  },
+  {
+   "default": "Photo",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Read From",
+   "options": "Photo\nPDF Text\nScanned PDF"
+  },
+  {
+   "fieldname": "bill_file",
+   "fieldtype": "Data",
+   "label": "Bill File",
+   "options": "URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill_section",
+   "fieldtype": "Section Break",
+   "label": "Confirmed Bill"
+  },
+  {
+   "fieldname": "bill_no",
+   "fieldtype": "Data",
+   "label": "Bill No"
+  },
+  {
+   "fieldname": "bill_date",
+   "fieldtype": "Date",
+   "label": "Bill Date"
+  },
+  {
+   "fieldname": "column_break_total",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "grand_total",
+   "fieldtype": "Currency",
+   "label": "Bill Total"
+  },
+  {
+   "description": "The label printed before each value on this supplier's bills, used to read the next bill.",
+   "fieldname": "anchors",
+   "fieldtype": "Small Text",
+   "label": "Learned Labels",
+   "read_only": 1
+  },
+  {
+   "fieldname": "text_section",
+   "fieldtype": "Section Break",
+   "label": "Text Read From the Bill"
+  },
+  {
+   "fieldname": "ocr_text",
+   "fieldtype": "Long Text",
+   "label": "Text",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-07 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nepal Compliance",
+ "name": "Bill Scan",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User",
+   "share": 0,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "supplier"
+}
