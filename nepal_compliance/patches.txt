@@ -30,3 +30,4 @@ nepal_compliance.patches.add_bill_discount_fields
 nepal_compliance.patches.add_invoice_attachment_fields
 nepal_compliance.patches.retire_vat_invoice_bulk_format
 nepal_compliance.patches.add_exclude_from_ird_register_field
+nepal_compliance.patches.summary_amounts_in_invoice_currency

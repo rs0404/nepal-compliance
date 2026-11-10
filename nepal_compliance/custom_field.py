@@ -28,12 +28,12 @@ def create_custom_fields(quiet=False):
             {"fieldname": "hs_code", "label": "H.S. Code", "fieldtype": "Data", "insert_after": "stock_uom", "description": "Harmonized System Code for the item, used for customs and trade purposes."}
         ],
         "Sales Invoice Item": [
-            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "insert_after": "net_amount", "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
+            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "options": "currency", "insert_after": "net_amount", "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "is_nontaxable_item", "label": "Is Non-Taxable Item", "fieldtype": "Check", "insert_after": "is_free_item", "fetch_from": "item_code.is_nontaxable_item", "read_only": 1},
             {"fieldname": "hs_code", "label": "H.S. Code", "fieldtype": "Data", "insert_after": "uom", "fetch_from": "item_code.hs_code"}
         ],
         "Purchase Invoice Item": [
-            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "insert_after": "net_amount", "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
+            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "options": "currency", "insert_after": "net_amount", "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "is_nontaxable_item", "label": "Is Non-Taxable Item", "fieldtype": "Check", "insert_after": "is_free_item", "fetch_from": "item_code.is_nontaxable_item", "read_only": 1},
             {"fieldname": "hs_code", "label": "H.S. Code", "fieldtype": "Data", "insert_after": "uom", "fetch_from": "item_code.hs_code"}
         ],
@@ -131,27 +131,27 @@ def create_custom_fields(quiet=False):
             },
             {"fieldname": "attach_purchase_invoice", "label": "Attach Purchase Invoice", "fieldtype": "Attach", "insert_after": "is_pan_or_abbreviated_bill", "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "taxable_summary_section", "label": "Taxable Summary", "fieldtype": "Section Break", "insert_after": "taxes"},
-            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1, "description": "Excise folded into the item rates because the company has no excise licence. Shown for reconciliation against the supplier's bill."},
-            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "insert_after": "excise_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1, "description": "Excise folded into the item rates because the company has no excise licence. Shown for reconciliation against the supplier's bill."},
+            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "excise_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "taxable_summary_col_break", "fieldtype": "Column Break", "insert_after": "non_taxable_amount"},
-            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "options": "currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "item_vat_detail", "label": "Item VAT Detail", "fieldtype": "Long Text", "insert_after": "summary_grand_total", "hidden": 1, "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
-            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "insert_after": "item_vat_detail", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
+            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "options": "currency", "insert_after": "item_vat_detail", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "options": "currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
         ],
         "Sales Order":[
             {"fieldname": "nepali_date", "label": "Nepali Date", "fieldtype": "Data", "insert_after": "transaction_date", "allow_on_submit": 1},
             {"fieldname": "taxable_summary_section", "label": "Taxable Summary", "fieldtype": "Section Break", "insert_after": "taxes"},
-            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "taxable_summary_col_break", "fieldtype": "Column Break", "insert_after": "non_taxable_amount"},
-            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "summary_grand_total", "label": "Order Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "summary_grand_total", "label": "Order Total", "fieldtype": "Currency", "options": "currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "item_vat_detail", "label": "Item VAT Detail", "fieldtype": "Long Text", "insert_after": "summary_grand_total", "hidden": 1, "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
-            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "insert_after": "item_vat_detail", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
+            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "options": "currency", "insert_after": "item_vat_detail", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "options": "currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
         ],
         "Sales Order Item": [
             {"fieldname": "is_nontaxable_item", "label": "Is Non-Taxable Item", "fieldtype": "Check", "insert_after": "is_free_item", "fetch_from": "item_code.is_nontaxable_item", "read_only": 1},
@@ -176,16 +176,16 @@ def create_custom_fields(quiet=False):
             {"fieldname": "customs_declaration_date", "label": "Customs Export Declaration Date", "fieldtype": "Date", "insert_after": "project", "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "customs_declaration_date_bs", "label": "Customs Export Declaration Date BS", "fieldtype": "Data", "insert_after": "customs_declaration_date", "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "taxable_summary_section", "label": "Taxable Summary", "fieldtype": "Section Break", "insert_after": "taxes"},
-            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1, "description": "Excise folded into the item rates because the company has no excise licence. Shown for reconciliation against the supplier's bill."},
-            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "insert_after": "excise_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_amount", "label": "Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_section", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "excise_amount", "label": "Excise Duty", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_amount", "read_only": 1, "allow_on_submit": 1, "description": "Excise folded into the item rates because the company has no excise licence. Shown for reconciliation against the supplier's bill."},
+            {"fieldname": "non_taxable_amount", "label": "Non-Taxable Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "excise_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "taxable_summary_col_break", "fieldtype": "Column Break", "insert_after": "non_taxable_amount"},
-            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "vat_amount", "label": "VAT Amount", "fieldtype": "Currency", "options": "currency", "insert_after": "taxable_summary_col_break", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "summary_grand_total", "label": "Bill Total", "fieldtype": "Currency", "options": "currency", "insert_after": "vat_amount", "read_only": 1, "allow_on_submit": 1},
             {"fieldname": "item_vat_detail", "label": "Item VAT Detail", "fieldtype": "Long Text", "insert_after": "summary_grand_total", "hidden": 1, "read_only": 1, "allow_on_submit": 1, "no_copy": 1},
             {"fieldname": "receive_without_tds", "label": "Receive Without TDS", "fieldtype": "Check", "insert_after": "item_vat_detail", "allow_on_submit": 1, "no_copy": 1, "description": "Tick when the customer pays this bill in full although 'Deduct TDS on Receipt' is enabled on the Customer."},
-            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "insert_after": "receive_without_tds", "read_only": 1, "allow_on_submit": 1},
-            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
+            {"fieldname": "bill_subtotal", "label": "Subtotal", "fieldtype": "Currency", "options": "currency", "insert_after": "receive_without_tds", "read_only": 1, "allow_on_submit": 1},
+            {"fieldname": "taxable_discount", "label": "Discount", "fieldtype": "Currency", "options": "currency", "insert_after": "bill_subtotal", "read_only": 1, "allow_on_submit": 1, "description": "Discount on taxable items, as printed on the bill. A non-taxable item's discount stays in its own amount."}
         ],
         "Delivery Note":[
             {"fieldname": "nepali_date", "label": "Nepali Date", "fieldtype": "Data", "insert_after": "posting_date", "allow_on_submit": 1}
@@ -437,6 +437,10 @@ def create_custom_fields(quiet=False):
                     current = cint(frappe.db.get_value("Custom Field", existing_name, "permlevel"))
                     if current != cint(field["permlevel"]):
                         updates["permlevel"] = cint(field["permlevel"])
+                # an amount follows the document's currency once its field names it
+                if field["fieldtype"] == "Currency" and field.get("options"):
+                    if frappe.db.get_value("Custom Field", existing_name, "options") != field["options"]:
+                        updates["options"] = field["options"]
                 if updates:
                     frappe.db.set_value("Custom Field", existing_name, updates)
                 elif not quiet:
