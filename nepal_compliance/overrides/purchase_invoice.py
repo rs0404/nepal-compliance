@@ -22,6 +22,13 @@ class CustomPurchaseInvoice(PurchaseInvoice):
     def calculate_taxes_and_totals(self):
         NepalPurchaseTaxesAndTotals(self)
 
+    def validate_supplier_invoice(self):
+        """A customs bill carries the supplier's own invoice (CI) number, already on the
+        supplier's invoice, so ERPNext's unique Supplier Invoice No check is skipped for it."""
+        if self.get("customs_declaration_number"):
+            return
+        super().validate_supplier_invoice()
+
     def set_tax_withholding(self):
         """Use Taxable Amount as the TDS base when the withholding category requires it."""
         apply_taxable_amount_as_tds_base(self)
