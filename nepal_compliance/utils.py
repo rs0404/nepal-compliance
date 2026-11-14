@@ -586,6 +586,16 @@ def validate_duplicate_bill_no(doc, method):
         if existing_bill.lower() == normalized_bill_no.lower():
             supplier_name = frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier
             invoice_link = get_link_to_form("Purchase Invoice", inv.name)
+            if doc.get("customs_declaration_number"):
+                # a customs bill carries the supplier's own invoice number (CI): warn, don't block
+                frappe.msgprint(
+                    _("Bill No {0} is also on {1} from {2}. Saved anyway, as this is a customs bill (pragyapan {3}).").format(
+                        doc.bill_no, invoice_link, supplier_name, doc.customs_declaration_number
+                    ),
+                    indicator="orange",
+                    alert=True,
+                )
+                return
             frappe.msgprint(
                 _("<b>Duplicate Bill No Detected.</b><br><br>Supplier: {0}<br>Bill No: {1}<br>Fiscal Year: {2}<br><br>Existing Invoice: {3}<br><small>Click the invoice link above to view the existing record.</small>").format(
                     f"{supplier_name} ({doc.supplier})",
