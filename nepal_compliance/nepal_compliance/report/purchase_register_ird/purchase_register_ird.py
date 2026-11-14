@@ -264,6 +264,7 @@ def get_data(filters, bucket="all"):
         # a pragyapan patra bill is an import even when booked to a Nepal customs office supplier
         pragyapan_import = not is_foreign and bool((inv.customs_declaration_number or "").strip())
         is_import = is_foreign or pragyapan_import
+        customs_bill = bool((inv.customs_declaration_number or "").strip())
 
         pan = inv.invoice_pan or inv.supplier_tax_id
 
@@ -293,7 +294,9 @@ def get_data(filters, bucket="all"):
                 tax_exempt += net
                 continue
 
-            amt = net if legacy else item_taxable_amount(item, item_vat, item_vat_map, 4)
+            # a pragyapan bill's VAT is rounded up line by line at customs, so VAT ÷ 13% would
+            # overstate its base: the net amount is the customs valuation
+            amt = net if legacy or customs_bill else item_taxable_amount(item, item_vat, item_vat_map, 4)
             if item.get("asset_category"):
                 capital_taxable_amount += amt
                 tax_capital += item_vat

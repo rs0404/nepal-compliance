@@ -12,6 +12,7 @@ from frappe.utils import flt
 
 MONEY_TOLERANCE = 0.01
 VAT_CHECK_PRECISION = 4
+CUSTOMS_VAT_ROUNDING_SHARE = 0.001
 QUERY_BATCH_SIZE = 500
 NEPAL_PAN = re.compile(r"^[0-9]{9}$")
 IRD_CHECK_FIELDS = (
@@ -136,6 +137,16 @@ def check_party_tax_id(context, party, settings):
     return []
 
 
+def customs_rounded_vat(context, expected_vat, actual_vat):
+    """Customs works out VAT on each pragyapan line and rounds it up to the rupee, so a pragyapan bill's
+    VAT is a little over 13% of its taxable amount: under a rupee a line, taken here as up to 0.1% of
+    the VAT (at least one rupee). Never less than 13%."""
+    if context.get("doctype") == "Sales Invoice" or not str(context.get("customs_declaration_number") or "").strip():
+        return False
+    over = actual_vat - expected_vat
+    return -MONEY_TOLERANCE < over <= max(1.0, abs(expected_vat) * CUSTOMS_VAT_ROUNDING_SHARE)
+
+
 def check_amounts(context, settings):
     errors = []
     taxable = flt(
@@ -161,7 +172,7 @@ def check_amounts(context, settings):
             0.0 if pan_bill else flt(taxable * 0.13, VAT_CHECK_PRECISION)
         )
         actual_vat = flt(vat, VAT_CHECK_PRECISION)
-        if actual_vat != expected_vat:
+        if actual_vat != expected_vat and not customs_rounded_vat(context, expected_vat, actual_vat):
             errors.append(
                 issue(
                     "vat_mismatch",

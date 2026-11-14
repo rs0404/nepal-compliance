@@ -348,9 +348,11 @@ def apply_nontaxable_item_vat_override(doc):
 
     for item in flagged:
         detail = _parse_item_tax_rate(item.get("item_tax_rate"))
-        if not flt(detail.get(vat_account)):
+        charged = [account for account in vat_accounts(doc.company, side) if flt(detail.get(account))]
+        if not charged:
             continue
-        detail[vat_account] = 0
+        for account in charged:
+            detail[account] = 0
         item.item_tax_rate = json.dumps(detail)
 
 
@@ -454,8 +456,9 @@ def vat_charged_on_added_taxes(doc, vat_account=None):
         vat_account = get_configured_vat_accounts().get(doc.company, {}).get(side)
     if not vat_account:
         return False
+    accounts = {vat_account, *vat_accounts(doc.company, "sales" if doc.doctype == "Sales Invoice" else "purchase")}
     return any(
-        tax.account_head == vat_account
+        tax.account_head in accounts
         and tax.charge_type in PREVIOUS_ROW_VAT_CHARGE_TYPES
         for tax in (doc.get("taxes") or [])
     )
@@ -470,12 +473,21 @@ def get_configured_vat_accounts():
             accounts[row.company] = {
                 "sales": row.sales_vat_account,
                 "purchase": row.purchase_vat_account,
+                "purchase_import": row.get("purchase_import_vat_account"),
             }
     return accounts
+
+
+def vat_accounts(company, side):
+    """Every VAT ledger of a side: purchase also counts the optional Import VAT Account (customs VAT)."""
+    accounts = get_configured_vat_accounts().get(company, {})
+    names = [accounts.get(side)] + ([accounts.get("purchase_import")] if side == "purchase" else [])
+    return tuple(dict.fromkeys(name for name in names if name))
 
 def get_or_create_vat_exempt_template(company, vat_account, side):
     """Return the side-specific 0% VAT-exempt template, creating it if needed."""
     title = vat_exempt_template_title(side)
+    taxes = [{"tax_type": account, "tax_rate": 0} for account in dict.fromkeys((vat_account, *vat_accounts(company, side)))]
     existing = frappe.get_all(
         "Item Tax Template",
         filters={"company": company, "title": title},
@@ -483,12 +495,10 @@ def get_or_create_vat_exempt_template(company, vat_account, side):
     )
     if existing:
         template = frappe.get_doc("Item Tax Template", existing[0])
-        if (
-            len(template.taxes) != 1
-            or template.taxes[0].tax_type != vat_account
-            or flt(template.taxes[0].tax_rate) != 0
+        if sorted((row.tax_type, flt(row.tax_rate)) for row in template.taxes) != sorted(
+            (row["tax_type"], 0.0) for row in taxes
         ):
-            template.taxes = [{"tax_type": vat_account, "tax_rate": 0}]
+            template.set("taxes", taxes)
             template.save(ignore_permissions=True)
         return template.name or existing[0]
 
@@ -496,7 +506,7 @@ def get_or_create_vat_exempt_template(company, vat_account, side):
         "doctype": "Item Tax Template",
         "title": title,
         "company": company,
-        "taxes": [{"tax_type": vat_account, "tax_rate": 0}],
+        "taxes": taxes,
     }).insert(ignore_permissions=True)
     return template.name
 
@@ -554,6 +564,10 @@ def validate_duplicate_bill_no(doc, method):
     if not doc.bill_no or not doc.supplier:
         return
 
+    # a customs bill carries the supplier's own invoice number (CI), so it always repeats one: not checked
+    if doc.get("customs_declaration_number"):
+        return
+
     normalized_bill_no = str(doc.bill_no).strip().lstrip("0") or "0"
 
     fiscal_year = None
@@ -586,16 +600,6 @@ def validate_duplicate_bill_no(doc, method):
         if existing_bill.lower() == normalized_bill_no.lower():
             supplier_name = frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier
             invoice_link = get_link_to_form("Purchase Invoice", inv.name)
-            if doc.get("customs_declaration_number"):
-                # a customs bill carries the supplier's own invoice number (CI): warn, don't block
-                frappe.msgprint(
-                    _("Bill No {0} is also on {1} from {2}. Saved anyway, as this is a customs bill (pragyapan {3}).").format(
-                        doc.bill_no, invoice_link, supplier_name, doc.customs_declaration_number
-                    ),
-                    indicator="orange",
-                    alert=True,
-                )
-                return
             frappe.msgprint(
                 _("<b>Duplicate Bill No Detected.</b><br><br>Supplier: {0}<br>Bill No: {1}<br>Fiscal Year: {2}<br><br>Existing Invoice: {3}<br><small>Click the invoice link above to view the existing record.</small>").format(
                     f"{supplier_name} ({doc.supplier})",
@@ -635,8 +639,9 @@ def set_taxable_amounts(doc, method, consider_is_non_taxable_item=False):
     vat_amount = 0.0
     vat_divisor = 1.0
     if vat_account:
+        all_vat_accounts = vat_accounts(doc.company, side)
         for tax in doc.get("taxes") or []:
-            if tax.account_head != vat_account:
+            if tax.account_head not in all_vat_accounts:
                 continue
             vat_amount += tax_row_amount(tax)
             add_item_wise_vat(item_vat, tax.item_wise_tax_detail)
@@ -832,9 +837,9 @@ def get_vat_breakup(invoice_doctype, invoice_company_map):
             )
         )
 
+    company_accounts = {company: vat_accounts(company, side) for company in set(invoice_company_map.values())}
     for row in tax_rows:
-        vat_account = configured.get(invoice_company_map.get(row.parent), {}).get(side)
-        if not vat_account or row.account_head != vat_account:
+        if row.account_head not in company_accounts.get(invoice_company_map.get(row.parent), ()):
             continue
 
         entry = result[row.parent]
@@ -1214,7 +1219,7 @@ def get_purchase_taxable_tds_base(doc, throw_on_unavailable=True):
             frappe.bold(doc.company)
         )
     elif not any(
-        tax.get("account_head") == vat_account for tax in doc.get("taxes") or []
+        tax.get("account_head") in vat_accounts(doc.company, "purchase") for tax in doc.get("taxes") or []
     ):
         reason = _(
             "No Purchase VAT row using {0} was found, so Taxable Amount cannot be verified."
