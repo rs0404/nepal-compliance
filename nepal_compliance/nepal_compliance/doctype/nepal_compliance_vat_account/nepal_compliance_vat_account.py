@@ -15,6 +15,7 @@ class NepalComplianceVATAccount(Document):
 		for fieldname, label in (
 			("sales_vat_account", _("Sales VAT Account")),
 			("purchase_vat_account", _("Purchase VAT Account")),
+			("purchase_import_vat_account", _("Import VAT Account")),
 			("excise_account", _("Excise Duty Account")),
 			("tds_receivable_account", _("TDS Receivable Account")),
 		):

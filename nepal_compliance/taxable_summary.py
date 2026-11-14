@@ -166,9 +166,11 @@ def _differs(old_value, new_value):
 
 def _vat_included_in_rate(doc):
     """Whether the document's VAT row is included in the item rates."""
-    vat_account = get_configured_vat_accounts().get(doc.get("company"), {}).get(vat_side(doc.doctype))
+    configured = get_configured_vat_accounts().get(doc.get("company"), {})
+    side = vat_side(doc.doctype)
+    accounts = {configured.get(side), configured.get("purchase_import") if side == "purchase" else None} - {None}
     return any(
-        tax.get("included_in_print_rate") for tax in doc.get("taxes") or [] if tax.get("account_head") == vat_account
+        tax.get("included_in_print_rate") for tax in doc.get("taxes") or [] if tax.get("account_head") in accounts
     )
 
 
