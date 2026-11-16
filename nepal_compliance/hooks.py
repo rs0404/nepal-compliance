@@ -41,6 +41,7 @@ app_include_js = [
     "/assets/nepal_compliance/js/ird_month_picker.js",
     "/assets/nepal_compliance/js/ird_register.js?v=ird-checks-1",
     "/assets/nepal_compliance/js/icon_patch.js",
+    "/assets/nepal_compliance/js/ird_bridge.js",
     "/assets/nepal_compliance/js/employee_benefit_claim.js"]
 
 boot_session = "nepal_compliance.boot.get_boot_info"
@@ -61,14 +62,14 @@ boot_session = "nepal_compliance.boot.get_boot_info"
 
 # include js in doctype views
 doctype_js = {
-    "Company": "public/js/validate.js",
+    "Company": ["public/js/validate.js", "public/js/ird_pan.js"],
     "Purchase Invoice": ["public/js/purchase_invoice.js", "public/js/bill_summary.js", "public/js/field_help.js"],
     "Purchase Order": "public/js/field_help.js",
     "Sales Invoice": ["public/js/sales_invoice.js", "public/js/bill_summary.js"],
     "Sales Order": ["public/js/sales_order.js", "public/js/bill_summary.js"],
     "CBMS Settings": "nepal_compliance/doctype/cbms_settings/cbms_settings.js",
-    "Supplier": "public/js/validate.js",
-    "Customer": "public/js/validate.js",
+    "Supplier": ["public/js/validate.js", "public/js/ird_pan.js"],
+    "Customer": ["public/js/validate.js", "public/js/ird_pan.js"],
     "Salary Slip": "public/js/salary_slip.js",
     "Payroll Entry": "public/js/payroll_entry.js",
     "Payment Entry": "public/js/payment_entry.js"

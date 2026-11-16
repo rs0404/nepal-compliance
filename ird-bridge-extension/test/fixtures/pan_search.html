@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  A stand-in for https://ird.gov.np/pan-search/ with the same element ids and
+  flow: reCAPTCHA loads late, the form's submit runs grecaptcha.execute(),
+  whose callback POSTs the form to /api/getPanSearch/ and reads the JSON.
+  ?mode=found (default) | notfound | html | slowcaptcha
+  Used by test/fixtures/harness.html; see the README.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>PAN search fixture</title>
+	</head>
+	<body>
+		<form id="form" method="post" onsubmit="taxSearch(event)">
+			<input type="hidden" name="csrfmiddlewaretoken" value="fixture" />
+			<input id="pan" name="pan" type="text" />
+			<button id="submit" type="submit">Search</button>
+		</form>
+		<pre id="result"></pre>
+		<script>
+			const mode = new URLSearchParams(location.search).get("mode") || "found";
+			window.fixtureRequests = [];
+
+			// Stand-in for IRD's API. The extension wraps whatever window.fetch is.
+			window.fetch = async (url, init) => {
+				const pan = init.body.get("pan");
+				window.fixtureRequests.push({ url, pan, token: init.body.get("g-recaptcha-response") });
+				if (mode === "notfound") return new Response("{\"code\": 0}");
+				if (mode === "html") return new Response("<html>Server Error</html>");
+				const data = {
+					panDetails: [{ pan, trade_Name_Eng: "Fixture Traders", vdc_Town: "Kathmandu" }],
+					panRegistrationDetail: [{ acctType: "00", accountStatus: "A" }],
+				};
+				return new Response(JSON.stringify({ data }), { headers: { "content-type": "application/json" } });
+			};
+
+			setTimeout(() => {
+				window.grecaptcha = {
+					execute() {
+						setTimeout(() => onSubmit("fixture-token"), mode === "slowcaptcha" ? 3000 : 100);
+					},
+				};
+			}, 600);
+
+			function taxSearch(e) {
+				e.preventDefault();
+				grecaptcha.execute();
+			}
+
+			function onSubmit(token) {
+				const formData = new FormData(document.getElementById("form"));
+				formData.append("g-recaptcha-response", token);
+				fetch("/api/getPanSearch/", { method: "POST", body: formData })
+					.then((res) => res.json())
+					.then((json) => (document.getElementById("result").textContent = JSON.stringify(json)))
+					.catch((err) => (document.getElementById("result").textContent = "page error: " + err));
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,281 @@
+{
+ "actions": [],
+ "autoname": "field:pan",
+ "creation": "2026-11-17 10:00:00.000000",
+ "description": "IRD PAN search results fetched through the IRD Bridge browser extension.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pan",
+  "trade_name_en",
+  "trade_name_np",
+  "address",
+  "ward_no",
+  "column_break_status",
+  "pan_status",
+  "vat_registered",
+  "is_personal_pan",
+  "ird_office",
+  "effective_registration_date",
+  "registrations_section",
+  "registrations",
+  "business_names",
+  "tax_clearance_section",
+  "tax_clearance_fiscal_year",
+  "return_verified_date",
+  "column_break_clearance",
+  "tax_clearance_status",
+  "lookup_section",
+  "last_checked_on",
+  "column_break_lookup",
+  "last_checked_by",
+  "raw_response_section",
+  "raw_response"
+ ],
+ "fields": [
+  {
+   "fieldname": "pan",
+   "fieldtype": "Data",
+   "label": "PAN",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "length": 9,
+   "read_only": 1
+  },
+  {
+   "fieldname": "trade_name_en",
+   "fieldtype": "Data",
+   "label": "Name (English)",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "trade_name_np",
+   "fieldtype": "Data",
+   "label": "Name (Nepali)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ward_no",
+   "fieldtype": "Data",
+   "label": "Ward No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pan_status",
+   "fieldtype": "Data",
+   "label": "PAN Status",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "vat_registered",
+   "fieldtype": "Check",
+   "label": "VAT Registered",
+   "default": "0",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "An active VAT account is registered on this PAN.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "is_personal_pan",
+   "fieldtype": "Check",
+   "label": "Personal PAN",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ird_office",
+   "fieldtype": "Data",
+   "label": "IRD Office",
+   "read_only": 1
+  },
+  {
+   "fieldname": "effective_registration_date",
+   "fieldtype": "Data",
+   "label": "Effective Registration Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "registrations_section",
+   "fieldtype": "Section Break",
+   "label": "Registrations"
+  },
+  {
+   "fieldname": "registrations",
+   "fieldtype": "Table",
+   "label": "Registrations",
+   "options": "IRD PAN Registration",
+   "read_only": 1
+  },
+  {
+   "fieldname": "business_names",
+   "fieldtype": "Small Text",
+   "label": "Business Trade Names",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tax_clearance_section",
+   "fieldtype": "Section Break",
+   "label": "Tax Clearance"
+  },
+  {
+   "fieldname": "tax_clearance_fiscal_year",
+   "fieldtype": "Data",
+   "label": "Fiscal Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "return_verified_date",
+   "fieldtype": "Data",
+   "label": "Return Verified Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_clearance",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tax_clearance_status",
+   "fieldtype": "Data",
+   "label": "Tax Clearance Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lookup_section",
+   "fieldtype": "Section Break",
+   "label": "Lookup",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "last_checked_on",
+   "fieldtype": "Datetime",
+   "label": "Last Checked On",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_lookup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_checked_by",
+   "fieldtype": "Link",
+   "label": "Last Checked By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_response_section",
+   "fieldtype": "Section Break",
+   "label": "IRD Response",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "raw_response",
+   "fieldtype": "Code",
+   "label": "Raw Response",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-17 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Nepal Compliance",
+ "name": "IRD PAN Lookup",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Accounts User"
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Purchase Manager"
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Purchase User"
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Sales Manager"
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Sales User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "trade_name_en,trade_name_np",
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "trade_name_en",
+ "track_changes": 1,
+ "in_create": 1
+}

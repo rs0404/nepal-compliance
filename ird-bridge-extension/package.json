@@ -1,0 +1,12 @@
+{
+	"name": "ird-bridge-extension",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Chrome and Firefox extension that connects Nepal Compliance (ERPNext) to the IRD website.",
+	"type": "module",
+	"scripts": {
+		"build": "node build.mjs",
+		"package": "node build.mjs --zip",
+		"test": "node --test test/*.test.mjs"
+	}
+}
