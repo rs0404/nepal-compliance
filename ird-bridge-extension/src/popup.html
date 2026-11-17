@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>IRD Bridge</title>
+		<link rel="stylesheet" href="popup.css" />
+	</head>
+	<body>
+		<header>
+			<h1>IRD Bridge</h1>
+			<span id="version" class="muted"></span>
+		</header>
+
+		<section>
+			<h2>IRD access</h2>
+			<p id="ird-status" class="muted">Checking…</p>
+			<button id="grant-ird" hidden>Grant IRD access</button>
+		</section>
+
+		<section>
+			<h2>This tab</h2>
+			<p id="tab-origin" class="muted">-</p>
+			<button id="allow-site" hidden>Allow this ERP site</button>
+			<p id="tab-status" class="muted"></p>
+		</section>
+
+		<section>
+			<h2>Allowed ERP sites</h2>
+			<ul id="sites"></ul>
+			<p id="no-sites" class="muted" hidden>None yet. Open your ERP and click "Allow this ERP site".</p>
+		</section>
+
+		<p id="error" class="error" hidden></p>
+		<script type="module" src="popup.js"></script>
+	</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<!--
+  Runs the ERP bridge (nepal_compliance/public/js/ird_bridge.js) against the
+  real content script (src/erp_content.js) with a stubbed extension API and
+  stubbed Frappe globals. Serve the repository root over http and open
+  /ird-bridge-extension/test/fixtures/harness.html; results print on the page
+  and are exposed as window.harnessResults.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>IRD Bridge harness</title>
+	</head>
+	<body>
+		<pre id="out">running…</pre>
+		<script>
+			// ---- stubbed extension API used by erp_content.js
+			window.extensionCalls = [];
+			window.chrome = {
+				runtime: {
+					getManifest: () => ({ version: "0.1.0-test" }),
+					async sendMessage(msg) {
+						window.extensionCalls.push(msg);
+						if (msg.action === "ping") return { ok: true, data: { version: "0.1.0-test" } };
+						if (msg.action === "pan_search" && msg.payload.pan === "999999999") {
+							return { ok: false, error: { code: "tab_closed", message: "" } };
+						}
+						if (msg.action === "pan_search") {
+							return { ok: true, data: { response: { data: { panDetails: [{ pan: msg.payload.pan }] } } } };
+						}
+						return { ok: false, error: { code: "unknown_action" } };
+					},
+				},
+			};
+
+			// ---- stubbed Frappe globals used by ird_bridge.js
+			window.serverCalls = [];
+			window.frozen = [];
+			window.__ = (text, args) => (args || []).reduce((s, a, i) => s.replace(`{${i}}`, a), text);
+			window.frappe = {
+				provide(path) {
+					path.split(".").reduce((obj, key) => (obj[key] = obj[key] || {}), window);
+				},
+				dom: { freeze: (msg) => window.frozen.push(msg), unfreeze: () => window.frozen.push("unfreeze") },
+				async call(opts) {
+					window.serverCalls.push(opts);
+					return { message: { found: true, pan: opts.args.pan } };
+				},
+				throw(msg) {
+					throw new Error(msg);
+				},
+				msgprint() {},
+				utils: { escape_html: (s) => String(s) },
+			};
+		</script>
+		<script src="/ird-bridge-extension/src/erp_content.js"></script>
+		<script src="/nepal_compliance/public/js/ird_bridge.js"></script>
+		<script>
+			(async () => {
+				const bridge = nepal_compliance.ird_bridge;
+				const results = {};
+				results.version = bridge.installed_version();
+				results.available = await bridge.is_available();
+
+				const summary = await bridge.search_pan("123456789");
+				results.summary = summary;
+				const call = window.serverCalls[0];
+				results.serverMethod = call.method;
+				results.serverPan = call.args.pan;
+				results.serverResponse = JSON.parse(call.args.response);
+				results.unfrozen = window.frozen[window.frozen.length - 1] === "unfreeze";
+
+				try {
+					await bridge.search_pan("999999999");
+					results.errorCode = "no error";
+				} catch (e) {
+					results.errorCode = e.code;
+					results.errorMessage = e.message;
+				}
+
+				try {
+					await bridge.search_pan("12");
+					results.badPan = "no error";
+				} catch (e) {
+					results.badPan = e.message;
+				}
+
+				// A message from another window/origin must be ignored.
+				results.callsBeforeForeign = window.extensionCalls.length;
+				window.postMessage({ channel: "nc-ird-bridge", direction: "to-extension", id: "x", action: "ping" }, "*");
+				await new Promise((r) => setTimeout(r, 50));
+				results.sameWindowMessageRelayed = window.extensionCalls.length === results.callsBeforeForeign + 1;
+
+				window.harnessResults = results;
+				document.getElementById("out").textContent = JSON.stringify(results, null, 2);
+			})().catch((e) => {
+				window.harnessResults = { fatal: String(e && e.stack || e) };
+				document.getElementById("out").textContent = window.harnessResults.fatal;
+			});
+		</script>
+	</body>
+</html>
