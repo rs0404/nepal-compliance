@@ -8,6 +8,10 @@
 	};
 
 	const valid_pan = (value) => /^\d{9}$/.test(String(value || "").trim());
+	// The VAT/PAN field first, then ERPNext's standard Tax ID.
+	const pan_values = (frm, config) =>
+		[config.pan_field, "tax_id"].map((field) => String(frm.doc[field] || "").trim()).filter(Boolean);
+	const current_pan = (frm, config) => pan_values(frm, config).find(valid_pan) || "";
 	const same_name = (a, b) =>
 		String(a || "").trim().replace(/\s+/g, " ").toLowerCase() ===
 		String(b || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -54,24 +58,47 @@
 		frappe.show_alert({ message: __("IRD details applied. Save to keep them."), indicator: "blue" });
 	}
 
+	// app_include_js only loads on a full page load, so a desk opened before
+	// this app was updated has the form script but not the bridge.
+	async function load_bridge() {
+		if (!window.nepal_compliance?.ird_bridge?.search_and_show) {
+			await frappe.require("/assets/nepal_compliance/js/ird_bridge.js");
+		}
+		return nepal_compliance.ird_bridge;
+	}
+
 	function run_search(frm, config, pan) {
-		nepal_compliance.ird_bridge
-			.search_and_show(
-				pan,
-				(summary) => apply_options(frm, config, pan, summary),
-				(values, summary) => apply(frm, config, values, summary)
+		load_bridge()
+			.then((bridge) =>
+				bridge.search_and_show(
+					pan,
+					(summary) => apply_options(frm, config, pan, summary),
+					(values, summary) => apply(frm, config, values, summary)
+				)
 			)
-			.then((summary) => summary && summary.found && show_cached_status(frm, config));
+			.then((summary) => summary && summary.found && show_cached_status(frm, config))
+			.catch((e) => {
+				console.error(e);
+				if (frappe.msg_dialog?.display) return;
+				frappe.msgprint({ title: __("IRD PAN Search"), indicator: "red", message: e.message || String(e) });
+			});
 	}
 
 	function on_search_click(frm, config) {
-		const current = String(frm.doc[config.pan_field] || "").trim();
-		if (valid_pan(current)) {
+		const current = current_pan(frm, config);
+		if (current) {
 			run_search(frm, config, current);
 			return;
 		}
 		frappe.prompt(
-			{ fieldname: "pan", fieldtype: "Data", label: __("PAN"), reqd: 1, length: 9 },
+			{
+				fieldname: "pan",
+				fieldtype: "Data",
+				label: __("PAN"),
+				reqd: 1,
+				length: 9,
+				default: pan_values(frm, config)[0] || "",
+			},
 			(values) => run_search(frm, config, String(values.pan).trim()),
 			__("Search PAN on IRD"),
 			__("Search")
@@ -79,12 +106,12 @@
 	}
 
 	function show_cached_status(frm, config) {
-		const pan = String(frm.doc[config.pan_field] || "").trim();
-		if (!valid_pan(pan)) return;
+		const pan = current_pan(frm, config);
+		if (!pan) return;
 		frappe
 			.xcall("nepal_compliance.ird_bridge.get_cached_pan_lookup", { pan })
 			.then((lookup) => {
-				if (!lookup || String(frm.doc[config.pan_field] || "").trim() !== pan) return;
+				if (!lookup || current_pan(frm, config) !== pan) return;
 				const esc = frappe.utils.escape_html;
 				const active = lookup.pan_status === "Active";
 				const parts = [
