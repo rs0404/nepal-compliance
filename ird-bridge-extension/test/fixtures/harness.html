@@ -16,8 +16,11 @@
 		<script>
 			// ---- stubbed extension API used by erp_content.js
 			window.extensionCalls = [];
+			window.extensionListeners = [];
 			window.chrome = {
 				runtime: {
+					id: "harness-extension",
+					onMessage: { addListener: (fn) => window.extensionListeners.push(fn) },
 					getManifest: () => ({ version: "0.1.0-test" }),
 					async sendMessage(msg) {
 						window.extensionCalls.push(msg);
@@ -35,6 +38,8 @@
 
 			// ---- stubbed Frappe globals used by ird_bridge.js
 			window.serverCalls = [];
+			window.cacheCalls = [];
+			window.dialogs = [];
 			window.frozen = [];
 			window.__ = (text, args) => (args || []).reduce((s, a, i) => s.replace(`{${i}}`, a), text);
 			window.frappe = {
@@ -46,10 +51,26 @@
 					window.serverCalls.push(opts);
 					return { message: { found: true, pan: opts.args.pan } };
 				},
+				// PAN 111111111 is the one the ERP already has a saved lookup for.
+				async xcall(method, args) {
+					window.cacheCalls.push({ method, args });
+					return args.pan === "111111111" ? { name: args.pan, pan: args.pan, trade_name_en: "Saved Traders" } : null;
+				},
 				throw(msg) {
 					throw new Error(msg);
 				},
 				msgprint() {},
+				ui: {
+					Dialog: class {
+						constructor(options) {
+							this.options = options;
+						}
+						show() {
+							window.dialogs.push(this.options.title);
+						}
+						hide() {}
+					},
+				},
 				utils: { escape_html: (s) => String(s) },
 			};
 		</script>
@@ -84,6 +105,38 @@
 				} catch (e) {
 					results.badPan = e.message;
 				}
+
+				// lookup_pan: a saved PAN never opens IRD; an unsaved one does.
+				const searchesBefore = window.extensionCalls.filter((c) => c.action === "pan_search").length;
+				const saved = await bridge.lookup_pan("111111111");
+				results.lookupSaved = { found: saved.found, cached: saved.cached, name: saved.trade_name_en };
+				results.lookupSavedOpenedIrd =
+					window.extensionCalls.filter((c) => c.action === "pan_search").length !== searchesBefore;
+				results.lookupCacheMethod = window.cacheCalls[0].method;
+				const fresh = await bridge.lookup_pan("222222222");
+				results.lookupFresh = { found: fresh.found, cached: fresh.cached };
+				results.lookupFreshOpenedIrd =
+					window.extensionCalls.filter((c) => c.action === "pan_search").length === searchesBefore + 1;
+
+				// A search from the extension's popup reaches the ERP through the
+				// content script, is saved and is shown.
+				const callsBeforePopup = window.serverCalls.length;
+				const push = {
+					channel: "nc-ird-bridge",
+					direction: "to-content",
+					event: "pan_result",
+					payload: { pan: "333333333", response: { data: { panDetails: [{ pan: "333333333" }] } } },
+				};
+				let popupReply = null;
+				window.extensionListeners[0](push, { id: "harness-extension" }, (reply) => (popupReply = reply));
+				results.popupFromStranger = window.extensionListeners[0](push, { id: "someone-else" }, () => {});
+				await new Promise((r) => setTimeout(r, 50));
+				const popupCalls = window.serverCalls.slice(callsBeforePopup);
+				results.popupReply = popupReply;
+				results.popupSavedCount = popupCalls.length;
+				results.popupSavedPan = popupCalls[0] && popupCalls[0].args.pan;
+				results.popupSavedMethod = popupCalls[0] && popupCalls[0].method;
+				results.popupDialog = window.dialogs[window.dialogs.length - 1];
 
 				// A message from another window/origin must be ignored.
 				results.callsBeforeForeign = window.extensionCalls.length;

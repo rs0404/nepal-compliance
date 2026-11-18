@@ -7,6 +7,7 @@ import {
 	isValidPan,
 	originMatchPattern,
 	originOf,
+	searchErrorMessage,
 } from "../src/shared/protocol.js";
 
 test("isValidPan accepts exactly nine digits", () => {
@@ -36,4 +37,11 @@ test("contentScriptId is stable per origin", () => {
 
 test("bridgeError shape", () => {
 	assert.deepEqual(bridgeError("timeout"), { ok: false, error: { code: "timeout", message: "" } });
+});
+
+test("searchErrorMessage prefers its own wording, then the error's", () => {
+	assert.match(searchErrorMessage({ code: "no_ird_permission" }), /Grant IRD access/);
+	assert.equal(searchErrorMessage({ code: "weird", message: "Something odd" }), "Something odd");
+	assert.equal(searchErrorMessage({ code: "weird" }), "weird");
+	assert.equal(searchErrorMessage(undefined), "The search failed.");
 });
