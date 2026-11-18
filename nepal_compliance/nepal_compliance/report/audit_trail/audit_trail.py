@@ -150,7 +150,8 @@ class BaseAuditTrail:
         return doctypes
 
     def update_count(self):
-        fields = ["owner as user_name", "count(name) as count"]
+        # v16 builds get_all through the query builder, which rejects SQL functions written as strings
+        fields = ["owner as user_name", {"COUNT": "name", "as": "count"}]
         self.filters["creation"] = self.get_date()
 
         if doctype := self.filters.pop("doctype", None):

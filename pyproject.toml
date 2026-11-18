@@ -11,7 +11,7 @@ dependencies = [
     "qrcode[pil]",
     "PyPDF2>=3.0.0",
     "Pillow>=10.0.0"
-    # "frappe~=15.0.0" # Installed and managed by bench.
+    # frappe is installed and managed by bench; see tool.bench.frappe-dependencies.
 ]
 
 [build-system]
@@ -31,3 +31,9 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FRAPPE", "ERPNEXT", "HRMS", "PAYM
 # package_name = "~=1.1.0"
 parameterized = "~=0.8.1"
 time-machine = "~=2.10.0"
+
+# This branch targets Frappe / ERPNext version 16. bench refuses to install it
+# next to an older framework instead of failing later at runtime.
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0,<17.0.0"
+erpnext = ">=16.0.0,<17.0.0"

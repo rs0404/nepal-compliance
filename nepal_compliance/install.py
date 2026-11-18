@@ -25,5 +25,10 @@ def install():
 def before_tests():
     """Clear cache and run ERPNext's before_tests hook for this app's test site."""
     frappe.clear_cache()
-    from erpnext.setup.utils import before_tests as erpnext_before_tests
-    erpnext_before_tests()
+    try:
+        from erpnext.setup.utils import before_tests as core_before_tests
+    except ImportError:
+        # ERPNext v16 dropped its before_tests hook. HRMS still completes the
+        # setup wizard for a fresh test site, and this app already depends on it.
+        from hrms.tests.test_utils import before_tests as core_before_tests
+    core_before_tests()
