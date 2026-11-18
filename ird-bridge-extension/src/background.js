@@ -186,6 +186,43 @@ async function panSearch(pan, erpTab) {
 	});
 }
 
+// ---------------------------------------------------------------- popup search
+
+// The popup closes as soon as the IRD tab comes forward for a captcha, so the
+// last search is kept for the popup to show when it is opened again. Session
+// storage where the browser has it, so results do not outlive the browser.
+const searchStore = api.storage.session ?? api.storage.local;
+
+async function popupPanSearch(pan, tabId) {
+	const tab = tabId == null ? null : await api.tabs.get(tabId).catch(() => null);
+	await searchStore.set({ lastSearch: { pan, state: "searching", at: Date.now() } });
+	const result = await panSearch(pan, tab);
+
+	// On an allowed ERP tab, hand the answer to the ERP too, which saves it as
+	// an IRD PAN Lookup and shows it.
+	let sentToErp = false;
+	const origin = originOf(tab?.url);
+	if (result.ok && origin && (await getErpOrigins()).includes(origin)) {
+		sentToErp = await api.tabs
+			.sendMessage(tab.id, {
+				channel: CHANNEL,
+				direction: "to-content",
+				event: "pan_result",
+				payload: { pan, response: result.data.response },
+			})
+			.then((reply) => Boolean(reply?.ok), () => false);
+	}
+
+	const lastSearch = { pan, state: "done", at: Date.now(), result, sentToErp };
+	await searchStore.set({ lastSearch });
+	return { ok: true, data: lastSearch };
+}
+
+async function getLastSearch() {
+	const { lastSearch } = await searchStore.get("lastSearch");
+	return lastSearch || null;
+}
+
 // ---------------------------------------------------------------- messages
 
 async function fromErp(msg, sender) {
@@ -211,8 +248,14 @@ async function fromPopup(msg) {
 					version: api.runtime.getManifest().version,
 					irdAccess: await api.permissions.contains(IRD_PERMISSION),
 					origins: await getErpOrigins(),
+					lastSearch: await getLastSearch(),
 				},
 			};
+		case "pan_search":
+			return popupPanSearch(String(msg.pan || ""), msg.tabId);
+		case "clear_search":
+			await searchStore.remove("lastSearch");
+			return { ok: true, data: {} };
 		case "add_site":
 			return addErpSite(msg.origin, msg.tabId);
 		case "remove_site":

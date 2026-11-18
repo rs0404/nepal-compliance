@@ -41,7 +41,7 @@ app_include_js = [
     "/assets/nepal_compliance/js/ird_month_picker.js",
     "/assets/nepal_compliance/js/ird_register.js?v=ird-checks-1",
     "/assets/nepal_compliance/js/icon_patch.js",
-    "/assets/nepal_compliance/js/ird_bridge.js",
+    "/assets/nepal_compliance/js/ird_bridge.js?v=lookup-1",
     "/assets/nepal_compliance/js/employee_benefit_claim.js"]
 
 boot_session = "nepal_compliance.boot.get_boot_info"

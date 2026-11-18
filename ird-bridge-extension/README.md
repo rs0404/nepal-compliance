@@ -5,28 +5,45 @@ user's own browser. IRD's pages are protected by reCAPTCHA and browser
 sessions, so the ERP server cannot call them. The extension runs them in an
 IRD tab and hands the result back to the ERP page.
 
-This first version covers **PAN search** (https://ird.gov.np/pan-search/).
+It covers **PAN search** (https://ird.gov.np/pan-search/).
+
+## Where a PAN search starts
+
+| Where | What the user does | What happens |
+| --- | --- | --- |
+| Customer, Supplier or Company form | **IRD → Search PAN on IRD** | Uses the VAT/PAN field, or the standard **Tax ID** when that is empty, and asks for a PAN only when neither holds nine digits. Shows IRD's answer and offers to apply the PAN, the registered name and (for suppliers) the VAT-registered flag. |
+| IRD PAN Lookup list | **Search PAN on IRD** | Asks for a PAN and shows IRD's answer. |
+| IRD PAN Lookup form | **Refresh from IRD** | Searches that PAN again and updates the record. |
+| The extension's popup | Types a PAN and clicks **Search** | Shows IRD's answer in the popup. On an allowed ERP tab the answer is also saved in the ERP and shown there. |
+| Other apps | Call `nepal_compliance.ird_bridge.lookup_pan(pan)` | Resolves with the ERP's saved answer when there is one, and only opens IRD for a PAN the ERP has not seen. Made for checks that run as the user types. |
+
+Every answer is saved as an **IRD PAN Lookup** record, one per PAN. Code that
+cannot use the extension at all, such as a storefront serving guests, can read
+those records.
 
 ## How a PAN search works
 
-1. In the ERP, the user clicks **IRD → Search PAN on IRD** on a Customer,
-   Supplier or Company, or **Search PAN on IRD** on the IRD PAN Lookup list.
-2. `nepal_compliance/public/js/ird_bridge.js` posts a message on the
+1. `nepal_compliance/public/js/ird_bridge.js` posts a message on the
    `nc-ird-bridge` channel. `src/erp_content.js` (which runs only on ERP sites
-   allowed in the popup) relays it to `src/background.js`.
-3. The background opens `https://ird.gov.np/pan-search/?pan=<PAN>` in a
-   background tab, next to the ERP tab. It then runs
+   allowed in the popup) relays it to `src/background.js`. A search from the
+   popup goes to the background directly.
+2. The background opens `https://ird.gov.np/pan-search/?pan=<PAN>` in a
+   background tab, next to the tab the search came from. It then runs
    `src/shared/pan_search_page.js` in the page. That script fills in the PAN
    and presses IRD's own Search button.
-4. IRD's page runs its invisible reCAPTCHA and calls `/api/getPanSearch/`. If
+3. IRD's page runs its invisible reCAPTCHA and calls `/api/getPanSearch/`. If
    IRD has not answered after 8 seconds, the tab is brought forward so the
    user can complete a captcha challenge. The extension reads a copy of IRD's
    JSON answer.
-5. The IRD tab is closed and the JSON goes back to the ERP page. The page
+4. The IRD tab is closed and the JSON goes back to the ERP page. The page
    posts it to `nepal_compliance.ird_bridge.record_pan_lookup`, which parses
-   it, saves an **IRD PAN Lookup** record and returns a summary. The user can
-   apply the IRD name, the PAN and (for suppliers) the VAT-registered flag to
-   the form.
+   it, saves an **IRD PAN Lookup** record and returns a summary.
+
+A browser closes an extension's popup as soon as another tab comes forward, so
+a popup search that needs a captcha finishes in the background. The popup
+shows the last result when it is opened again. That result is kept in the
+browser's session storage and is gone when the browser closes; **Clear result**
+removes it sooner.
 
 The extension never stores IRD passwords and never bypasses reCAPTCHA. It
 only uses IRD's page the way a person would.
@@ -43,13 +60,15 @@ npm test
 
 ## Install for testing
 
-**Chrome / Edge / Brave:** open `chrome://extensions`, turn on Developer mode,
-click **Load unpacked** and pick `dist/chrome`.
+**Chrome / Edge / Brave:** unzip `ird-bridge-chrome-<version>.zip` (or use
+`dist/chrome`), open `chrome://extensions`, turn on Developer mode, click
+**Load unpacked** and pick the folder.
 
 **Firefox (128+):** open `about:debugging#/runtime/this-firefox`, click **Load
-Temporary Add-on…** and pick `dist/firefox/manifest.json`. Temporary add-ons
-are removed when Firefox restarts. A permanent install needs the add-on
-signed by AMO (it can be unlisted).
+Temporary Add-on…** and pick `manifest.json` in the unzipped
+`ird-bridge-firefox-<version>.zip` (or `dist/firefox`). Temporary add-ons are
+removed when Firefox restarts. A permanent install needs the add-on signed by
+AMO (it can be unlisted).
 
 ## Set up
 
@@ -59,7 +78,21 @@ signed by AMO (it can be unlisted).
    access**.
 4. Reload the ERP page.
 
-## Manual browser harness
+The popup's own PAN search needs only step 3.
+
+## Tests
+
+`npm test` runs, with Node alone:
+
+- `test/protocol.test.mjs` and `test/pan_summary.test.mjs`: the shared helpers
+  and the popup's reading of IRD's answer.
+- `test/background.test.mjs`: `src/background.js` against a stubbed extension
+  API. It covers which messages are accepted, a search from an ERP page, and
+  a search from the popup, including what is handed to an ERP tab.
+- `test/build.test.mjs`: the Chrome and Firefox manifests, the built files
+  and the zips.
+
+### Manual browser harness
 
 `test/fixtures/pan_search.html` is a stand-in for IRD's PAN search page
 (found / notfound / html / slowcaptcha modes). `test/fixtures/harness.html`
@@ -73,8 +106,11 @@ page.
 
 The page script relies on these parts of IRD's PAN search page: the
 `#form`, `#pan` and `#submit` elements, `window.grecaptcha`, and a `fetch` to
-`/api/getPanSearch/`. The server-side parser relies on the JSON keys
-`panDetails`, `panRegistrationDetail`, `businessDetail` and
-`panTaxClearance`. If any of these change, the ERP shows "The IRD PAN search
-page has changed…", and `src/shared/pan_search_page.js` and
-`nepal_compliance/ird_bridge.py` need updating.
+`/api/getPanSearch/`. The parsers rely on the JSON keys `panDetails`,
+`panRegistrationDetail`, `businessDetail` and `panTaxClearance`, and on IRD's
+account type and status codes. If any of these change, the ERP shows "The IRD
+PAN search page has changed…", and these need updating:
+
+- `src/shared/pan_search_page.js`: the page script.
+- `nepal_compliance/ird_bridge.py`: the ERP's parser and code tables.
+- `src/shared/pan_summary.js`: the popup's summary and the same code tables.

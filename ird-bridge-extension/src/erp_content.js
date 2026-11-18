@@ -41,4 +41,17 @@
 			(err) => fail("extension_reloaded", err)
 		);
 	});
+
+	// The answer of a search started from the extension's popup on this tab.
+	api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+		if (!msg || msg.channel !== CHANNEL || msg.direction !== "to-content" || sender.id !== api.runtime.id) {
+			return false;
+		}
+		window.postMessage(
+			{ channel: CHANNEL, direction: "to-erp", event: String(msg.event || ""), payload: msg.payload },
+			window.location.origin
+		);
+		sendResponse({ ok: true });
+		return false;
+	});
 })();

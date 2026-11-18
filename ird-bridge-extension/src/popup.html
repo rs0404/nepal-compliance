@@ -12,6 +12,16 @@
 		</header>
 
 		<section>
+			<h2>Search PAN on IRD</h2>
+			<form id="pan-form">
+				<input id="pan" type="text" inputmode="numeric" maxlength="9" placeholder="9-digit PAN" autocomplete="off" />
+				<button id="pan-search" type="submit">Search</button>
+			</form>
+			<div id="pan-result"></div>
+			<button id="pan-clear" class="link" type="button" hidden>Clear result</button>
+		</section>
+
+		<section>
 			<h2>IRD access</h2>
 			<p id="ird-status" class="muted">Checking…</p>
 			<button id="grant-ird" hidden>Grant IRD access</button>

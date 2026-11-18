@@ -7,6 +7,9 @@
 frappe.provide("nepal_compliance.ird_bridge");
 
 (function () {
+	// Loaded on every desk page, and again by forms that find it missing.
+	if (nepal_compliance.ird_bridge.search_pan) return;
+
 	const CHANNEL = "nc-ird-bridge";
 	const PING_TIMEOUT_MS = 2000;
 	const PAN_SEARCH_TIMEOUT_MS = 3 * 60 * 1000;
@@ -39,7 +42,12 @@ frappe.provide("nepal_compliance.ird_bridge");
 	window.addEventListener("message", (event) => {
 		if (event.source !== window || event.origin !== window.location.origin) return;
 		const msg = event.data;
-		if (!msg || msg.channel !== CHANNEL || msg.direction !== "to-erp" || !msg.id) return;
+		if (!msg || msg.channel !== CHANNEL || msg.direction !== "to-erp") return;
+		if (msg.event === "pan_result") {
+			on_popup_result(msg.payload);
+			return;
+		}
+		if (!msg.id) return;
 		const entry = pending.get(msg.id);
 		if (!entry) return;
 		pending.delete(msg.id);
@@ -90,13 +98,48 @@ frappe.provide("nepal_compliance.ird_bridge");
 					"PAN search on IRD runs through the IRD Bridge browser extension (Chrome or Firefox)."
 				)}</p>
 				<ol>
-					<li>${__("Install the IRD Bridge extension in this browser.")}</li>
 					<li>${__(
-						"Open its popup on this ERP tab and click <b>Allow this ERP site</b>."
+						"Get the IRD Bridge package for your browser from your system administrator and unzip it."
+					)}</li>
+					<li>${__(
+						"Chrome, Edge or Brave: open <b>chrome://extensions</b>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and pick the unzipped folder."
+					)}</li>
+					<li>${__(
+						"Firefox: open <b>about:debugging#/runtime/this-firefox</b>, click <b>Load Temporary Add-on</b> and pick <b>manifest.json</b> in the unzipped folder."
+					)}</li>
+					<li>${__(
+						"Come back to this ERP tab, click the IRD Bridge icon in the toolbar and click <b>Allow this ERP site</b>. If it shows <b>Grant IRD access</b>, click that too."
 					)}</li>
 					<li>${__("Reload this page and try again.")}</li>
-				</ol>`,
+				</ol>
+				<p class="text-muted">${__(
+					"Already installed? Then this ERP site is not allowed yet, or the page was open before it was allowed: do the last two steps."
+				)}</p>`,
 		});
+	}
+
+	// The saved IRD result for a PAN when the ERP has one, else a fresh search.
+	// For checks that run as the user types, where opening IRD each time for a
+	// PAN the ERP already knows would only slow them down.
+	async function lookup_pan(pan) {
+		pan = String(pan || "").replace(/\s+/g, "");
+		const cached = await frappe
+			.xcall("nepal_compliance.ird_bridge.get_cached_pan_lookup", { pan })
+			.catch(() => null);
+		if (cached) return Object.assign({ found: true, cached: true }, cached);
+		return search_pan(pan);
+	}
+
+	// A PAN searched from the extension's popup while this ERP tab was open:
+	// save it like any other search and show it.
+	async function on_popup_result(payload) {
+		const pan = String((payload && payload.pan) || "");
+		if (!/^\d{9}$/.test(pan) || !payload.response) return;
+		const r = await frappe.call({
+			method: "nepal_compliance.ird_bridge.record_pan_lookup",
+			args: { pan, response: JSON.stringify(payload.response) },
+		});
+		show_result(r.message);
 	}
 
 	// Runs IRD's PAN search in the browser and caches the answer in the ERP.
@@ -221,6 +264,7 @@ frappe.provide("nepal_compliance.ird_bridge");
 		IRDBridgeError,
 		installed_version,
 		is_available,
+		lookup_pan,
 		search_pan,
 		search_and_show,
 		show_result,
